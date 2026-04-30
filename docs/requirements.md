@@ -68,6 +68,12 @@ itself, ...).
   S3 lifecycle rule the user is asked to configure (documented).
 - **No silent deletions.** A file disappearing locally never deletes from
   the bucket. Bucket deletes are explicit user actions in the gallery UI.
+- **Deletes are hard.** When the user deletes from the gallery, the app
+  issues `DeleteObject` straight away. There is no in-app trash. Users
+  who want a safety net are expected to enable bucket-level
+  versioning, MFA-delete, or object-lock at the provider — those work
+  uniformly across S3-compatible services and don't need app-side
+  support.
 - **Storage portability.** All S3 access goes through one signing layer so
   swapping providers means changing endpoint / creds, not code.
 - **Recoverable from bucket alone.** If a user clears site data, opening
@@ -96,8 +102,6 @@ itself, ...).
   app from a phone *and* a laptop. We assume infrequent concurrent writes
   and rely on content-addressable keys to make collisions harmless. Index
   refresh strategy across devices is a follow-up.
-- **Soft-delete.** Probably worth a "trashed" marker (object tag or move
-  to a `trash/` prefix) before a hard delete. Decision deferred.
 - **Encryption at rest beyond what S3 provides.** Client-side envelope
   encryption is possible but breaks browser-native playback of videos.
   Out of scope for v1.

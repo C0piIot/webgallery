@@ -88,8 +88,9 @@ either on the user's device (IndexedDB) or in the user's bucket.
       metadata, when extractable
     - `x-amz-meta-source-path` — the local path the file came from
       (for debugging; optional)
-- **Trash (future).** Soft-deletes either move objects to `trash/` or
-  add a `Status: trashed` object tag.
+- **No trash prefix.** Deletes are hard `DeleteObject` calls. Recovery is
+  the user's responsibility via bucket versioning / object-lock; not an
+  app-level concern.
 - **Gallery index (future, when needed).** A sharded JSON index under
   `index/YYYY-MM.json` updated as files arrive. Skips full
   `ListObjectsV2` walks on gallery load. Not in v1 — start with listing
