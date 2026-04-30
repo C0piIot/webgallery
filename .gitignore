@@ -1,0 +1,28 @@
+# Go build output
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+
+# Local databases / data
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+/data/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Dependency caches
+/vendor/
