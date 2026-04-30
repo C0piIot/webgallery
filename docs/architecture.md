@@ -1,113 +1,173 @@
 # Architecture
 
 ```
-┌──────────────────────────────────────────────┐
-│  Browser                                     │
-│                                              │
-│  ┌──────────────┐    ┌────────────────────┐  │
-│  │ Gallery UI   │    │  Sync Web Worker   │  │
-│  │ (htmx + JS)  │    │  - walks folders   │  │
-│  │              │    │  - hashes files    │  │
-│  │              │    │  - uploads diffs   │  │
-│  └──────┬───────┘    └─────────┬──────────┘  │
-│         │                      │             │
-│         │  HTML / htmx         │  HTTP+JSON  │
-└─────────┼──────────────────────┼─────────────┘
-          │                      │
-          ▼                      ▼
-┌──────────────────────────────────────────────┐
-│  Go server (single binary)                   │
-│                                              │
-│   HTTP handlers ── templates (html/template) │
-│        │                                     │
-│        ├──► MetadataStore (database/sql)     │
-│        │       ├─ SQLite (default)           │
-│        │       └─ Postgres (optional)        │
-│        │                                     │
-│        └──► BlobStore (S3 SDK v2)            │
-│                ├─ AWS S3                     │
-│                └─ S3-compatible (R2/B2/...)  │
-└──────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Browser (PWA)                                              │
+│                                                             │
+│  ┌──────────────────┐    ┌────────────────────────────┐     │
+│  │  Gallery UI      │    │  Sync Web Worker           │     │
+│  │  - lists/views   │    │  - walks folder handles    │     │
+│  │  - opens detail  │    │  - hashes new/changed      │     │
+│  │  - deletes       │    │  - uploads via SigV4 PUT   │     │
+│  └────────┬─────────┘    └──────────────┬─────────────┘     │
+│           │                             │                   │
+│           ├──────► IndexedDB ◄──────────┤                   │
+│           │   - credentials             │                   │
+│           │   - sync index              │                   │
+│           │     (path,size,mtime→hash)  │                   │
+│           │   - gallery cache           │                   │
+│           │                             │                   │
+│           └─────────► SigV4 signer ◄────┘                   │
+│                          │                                  │
+│  ┌──────────────────┐    │                                  │
+│  │ Service Worker   │    │                                  │
+│  │ (offline shell)  │    │                                  │
+│  └──────────────────┘    │                                  │
+└──────────────────────────┼──────────────────────────────────┘
+                           │ HTTPS, signed requests
+                           ▼
+              ┌────────────────────────────┐
+              │  S3-compatible bucket      │
+              │  (user-owned)              │
+              │                            │
+              │  media/{sha256}.{ext}      │
+              │    └─ x-amz-meta-*         │
+              │       (capture date, name) │
+              │                            │
+              │  index/YYYY-MM.json        │
+              │    (optional, future)      │
+              └────────────────────────────┘
 ```
 
-## Server (Go)
+There is no application server. The PWA is a static bundle. All state lives
+either on the user's device (IndexedDB) or in the user's bucket.
 
-- **HTTP layer.** Stdlib `net/http` plus a lightweight router (`chi`).
-  Server-renders gallery pages with `html/template`. Returns HTML fragments
-  for htmx requests and JSON for the sync client.
-- **Storage interfaces.** Two seams the rest of the code talks through:
-  - `MetadataStore` — CRUD over the `media` table, hash lookups for dedup.
-  - `BlobStore` — `Put(ctx, key, reader)`, `Get(ctx, key) → reader`,
-    `Delete`, `PresignGet(key, ttl)`. Backed by `aws-sdk-go-v2/service/s3`
-    with a configurable endpoint so non-AWS S3-compatible services work.
-- **DB access.** `database/sql` with `sqlc` for typed queries. Schema kept
-  to the SQLite/Postgres common subset (no SQLite-only types, no
-  Postgres-only features in v1). Migrations via `goose` or
-  `golang-migrate`.
-- **Config.** Env vars — DB DSN, S3 endpoint/bucket/credentials, listen
-  address. No config file in v1.
+## Static bundle
 
-## Data model (initial)
+- **Build.** Plain HTML/CSS/JS with a small build step (esbuild or Vite) to
+  bundle modules and produce a hashed-filename output suitable for
+  long-cache static hosting. No framework — vanilla JS for the UI. (htmx
+  was on the table when we had a server; without one, it doesn't earn its
+  weight.)
+- **Service Worker.** Caches the app shell so the gallery loads offline.
+  Does not cache media bytes — those are large and the Range requests
+  videos use don't play well with naive SW caching.
+- **PWA manifest.** Installable on desktop and mobile.
+- **Hosting.** Anything static. The bucket itself works (with a website
+  endpoint + CloudFront), but GitHub Pages or Cloudflare Pages are easier
+  to start with.
 
-`media` table:
-- `id` (uuid, primary key)
-- `content_hash` (sha256 hex, unique) — dedup key
-- `storage_key` (string) — object key in the bucket
-- `filename` (string) — original basename at upload time
-- `content_type` (string)
-- `size_bytes` (int64)
-- `captured_at` (timestamp, nullable) — from EXIF / mp4 metadata when present
-- `created_at` (timestamp) — when the server first saw the file
-- `source_path` (string, nullable) — last known path on the user's machine,
-  for debugging
+## Talking to S3
 
-Indexes on `content_hash` (unique), `captured_at`, `created_at`.
+- **SigV4 in the browser.** Use a small SigV4 implementation
+  (`aws4fetch` or hand-rolled, ~5 KB) rather than the full
+  `@aws-sdk/client-s3` (hundreds of KB). Works against any S3-compatible
+  endpoint by configuring `service: "s3"`, the user's region, and the
+  endpoint host.
+- **One signing seam.** All bucket access goes through a `BucketClient`
+  module exposing `put`, `get`, `head`, `list`, `delete`, plus the
+  multipart calls (`createMultipartUpload`, `uploadPart`,
+  `completeMultipartUpload`, `abortMultipartUpload`). Provider quirks
+  (path-style vs virtual-hosted, trailing-slash listing, etc.) are
+  isolated here.
+- **Multipart uploads** for files above ~50 MB so a dropped connection
+  doesn't restart from byte zero. Parts ~8 MB.
+- **CORS.** The bucket must be configured to accept the PWA's origin.
+  We ship a documented JSON snippet the user pastes into their bucket's
+  CORS configuration.
 
-## API surface (initial sketch)
+## Object layout
 
-- `GET /` — gallery view (HTML).
-- `GET /media/{id}` — detail page (HTML).
-- `GET /media/{id}/file` — 302 to a presigned S3 URL, or stream-through if
-  the bucket isn't publicly reachable.
-- `POST /api/sync/check` — body: `{ hashes: [...] }`. Returns the subset
-  the server doesn't have. Lets the client skip already-backed-up files.
-- `POST /api/media` — multipart upload of a single file plus metadata
-  (filename, source_path, captured_at if known). Server hashes on the way
-  in, dedups, writes to S3, inserts the row.
-- `DELETE /api/media/{id}` — removes the row and the object.
+- **Media objects.** `media/{sha256}.{ext}`
+  - Content-addressable, so dedup is automatic and re-uploads are no-ops.
+  - Extension is derived from filename / content-type at upload time so
+    the URL is intuitive and browsers infer the right MIME.
+  - User-defined metadata set at PUT:
+    - `x-amz-meta-filename` — original basename
+    - `x-amz-meta-captured-at` — ISO-8601 timestamp from EXIF / mp4
+      metadata, when extractable
+    - `x-amz-meta-source-path` — the local path the file came from
+      (for debugging; optional)
+- **Trash (future).** Soft-deletes either move objects to `trash/` or
+  add a `Status: trashed` object tag.
+- **Gallery index (future, when needed).** A sharded JSON index under
+  `index/YYYY-MM.json` updated as files arrive. Skips full
+  `ListObjectsV2` walks on gallery load. Not in v1 — start with listing
+  the bucket and caching the result in IndexedDB.
 
-## Sync client (browser)
+## IndexedDB stores
 
-- **Folder picker.** `window.showDirectoryPicker()` returns a
-  `FileSystemDirectoryHandle`. Handles are stored in IndexedDB so they
-  survive page reloads; the user re-grants permission once per browser
-  session via `handle.requestPermission({mode: 'read'})`.
-- **Web Worker.** Receives the folder handles, walks them recursively,
-  computes SHA-256 of each file (streamed via `crypto.subtle.digest`),
-  batches hashes to `POST /api/sync/check`, uploads the unknown ones via
-  `POST /api/media`. Reports progress to the main thread.
-- **Local state.** IndexedDB tracks per-file hash + last-known-mtime so
-  re-scans skip unchanged files quickly.
-- **No deletions.** A file disappearing locally never triggers a server
-  delete.
+- `config` — selected provider, endpoint, region, bucket, access key,
+  secret. (Single record.)
+- `folders` — `FileSystemDirectoryHandle`s the user has granted access
+  to, plus a friendly label.
+- `sync_index` — `(path, size, mtime) → sha256` records. The hot path
+  for sync: lookup is `O(1)` and decides whether to skip the file.
+- `uploaded` — set of `sha256` values known to be in the bucket. Avoids
+  redundant `HEAD` calls when two local files share a hash. Refreshed
+  periodically from a `ListObjectsV2` walk.
+- `gallery_cache` — denormalized list of objects (key, size,
+  last-modified, captured-at) for fast gallery rendering. Rebuilt from
+  the bucket; treat as cache, not source of truth.
 
-## Why these choices
+## Sync flow (Web Worker)
 
-- **Go.** Good fit for streaming uploads, S3 multipart, single-binary
-  deployment.
-- **SQLite default, Postgres-capable.** SQLite makes "clone, run, done"
-  trivial; staying portable means we don't repaint when the dataset grows.
-- **htmx over a SPA.** UI is mostly server data + occasional partial
-  updates. Avoids the build pipeline tax for a one-person app.
-- **File System Access API.** Sidesteps building and shipping a desktop
-  sync agent. Tradeoff: Chromium-only desktop browsers in v1.
+1. Worker boots with the credentials and folder handles handed in from
+   the main thread.
+2. Walk each folder recursively.
+3. For each file emit `(path, size, mtime)`. Look up `sync_index`:
+   - Hit → file is unchanged since last sync. Skip.
+   - Miss → hash the file (streamed through `crypto.subtle.digest`).
+4. For the resulting `sha256`, check `uploaded`:
+   - Hit → already in bucket; just record `(path, size, mtime) → hash`
+     in `sync_index`.
+   - Miss → `HEAD media/{sha256}.{ext}`:
+     - 200 → object exists; populate `uploaded`, then record in
+       `sync_index`.
+     - 404 → upload via PUT (or multipart for large files), set the
+       metadata headers, then populate both stores.
+5. Report progress to the main thread (files seen, files uploaded,
+   bytes uploaded). Errors are surfaced per-file and retried with
+   backoff; a file that fails repeatedly is reported and the worker
+   moves on rather than wedging the whole sync.
+
+## Gallery flow
+
+1. On open, load `gallery_cache` from IndexedDB and render immediately.
+2. In the background, run `ListObjectsV2` over `media/`. Reconcile with
+   the cache — add new keys, drop missing ones — and re-render the
+   delta.
+3. Detail view: `<img src="...">` or `<video src="...">` pointing at
+   the bucket URL (or a presigned URL if the bucket isn't directly
+   readable from the PWA's origin). Capture date and filename come
+   from a `HEAD` request, cached.
+4. Delete: `DELETE` the object, drop from caches, re-render.
+
+## Why these choices (vs. the previous server-backed design)
+
+- **Operationally simpler.** No host, no DB, no deploy pipeline beyond
+  static files.
+- **Data lives where the user wants it.** Their bucket, their bytes.
+- **Hash-addressable keys + IndexedDB cache** give us dedup and fast
+  re-syncs without a metadata DB. The metadata that matters
+  (capture date, filename) rides along on the S3 object as user-defined
+  headers, so the bucket alone is enough to reconstruct the gallery.
 
 ## Known constraints / risks
 
-- File System Access API isn't in Safari or Firefox. Firefox tracks it but
-  ships nothing usable today. Document this clearly in the UI.
-- Background sync while the tab is closed isn't reliably available. Sync
-  runs while the gallery tab is open; that's fine for v1.
-- Hashing large videos client-side is slow. The worker should stream
-  through `crypto.subtle.digest` rather than loading whole files into
-  memory.
+- **File System Access API is Chromium-only.** Safari and Firefox users
+  fall back to manual `<input type="file" multiple webkitdirectory>`
+  uploads — works but no automatic re-sync.
+- **Credentials in the browser.** XSS on this origin = full bucket
+  access. Strict CSP and no third-party runtime JS are non-negotiable.
+  The recommended IAM policy is bucket-scoped and excludes
+  bucket-creation / billing actions.
+- **Listing scales linearly.** Tens of thousands of objects make
+  `ListObjectsV2` slow on cold load. Mitigated by IndexedDB caching;
+  the sharded `index/YYYY-MM.json` strategy is the eventual answer.
+- **Multipart cleanup.** Aborted multipart uploads accrue cost. We ship
+  a recommended bucket lifecycle rule (`AbortIncompleteMultipartUpload`,
+  N=7 days) for users to apply.
+- **Background sync.** Tab-must-be-open is acceptable for v1; full
+  background sync needs Service Worker `Background Sync`, which is
+  unreliable across browsers.

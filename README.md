@@ -1,20 +1,41 @@
 # webgallery
 
-Self-hosted web app that serves as a personal photo/video gallery and a backup
-target for selected local folders.
+A static **Progressive Web App** that doubles as a personal photo/video
+gallery and a backup tool. There is no backend — the PWA talks straight to
+an S3-compatible bucket the user provides.
 
-Status: early design. No code yet — see [`docs/`](./docs) for goals and the
-intended architecture.
+Status: early design. No code yet — see [`docs/`](./docs).
 
 - [`docs/requirements.md`](./docs/requirements.md) — what v1 should and
   shouldn't do.
-- [`docs/architecture.md`](./docs/architecture.md) — system layout, data
-  model, and the choices behind them.
+- [`docs/architecture.md`](./docs/architecture.md) — system layout, object
+  layout, sync flow, and the tradeoffs.
+
+## How it works (in one paragraph)
+
+The user opens the PWA, picks an S3-compatible provider (AWS, R2, B2,
+MinIO, ...), and pastes their endpoint, bucket, and credentials. They grant
+the app access to one or more local folders via the File System Access API.
+A Web Worker walks those folders, hashes new or changed files, and uploads
+them straight to the bucket using SigV4 signing — keys are
+content-addressable (`media/{sha256}.{ext}`) so dedup is automatic. The
+gallery view lists the bucket and renders originals.
 
 ## Stack (planned)
 
-- Go server, single binary.
-- SQL for metadata (SQLite default, Postgres-portable).
-- S3-compatible object storage for bytes (AWS S3, R2, B2, MinIO, ...).
-- Server-rendered HTML + htmx for the gallery; vanilla JS + a Web Worker
-  driving the File System Access API for backup sync.
+- Vanilla JS + a small build step (esbuild/Vite). No framework.
+- Service Worker for offline app shell + PWA installability.
+- File System Access API for folder access (Chromium desktop only).
+- IndexedDB for credentials, sync index `(path,size,mtime)→hash`, and
+  gallery cache.
+- `aws4fetch` (or equivalent ~5 KB SigV4 helper) for direct calls to any
+  S3-compatible endpoint.
+
+## Caveats up front
+
+- Chromium desktop browsers only for folder sync; Safari/Firefox can use
+  the gallery and manual file uploads.
+- Credentials live in IndexedDB on the device. Strict CSP and bucket-scoped
+  IAM are mandatory; documentation will spell out the recommended policy.
+- Sync runs while the tab is open; reliable background-while-closed isn't
+  feasible cross-browser today.
