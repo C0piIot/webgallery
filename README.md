@@ -26,7 +26,8 @@ originals.
 
 ## Stack (planned)
 
-- Vanilla JS + a small build step (esbuild/Vite). No framework.
+- Vanilla JS, no build step. Native ES modules, hand-written Service
+  Worker and PWA manifest, third-party deps vendored under `vendor/`.
 - Service Worker for offline app shell + PWA installability.
 - File System Access API for folder access (Chromium desktop only).
 - IndexedDB for credentials, sync index `(path,size,mtime)→hash`, and

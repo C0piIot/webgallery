@@ -44,20 +44,39 @@
 There is no application server. The PWA is a static bundle. All state lives
 either on the user's device (IndexedDB) or in the user's bucket.
 
-## Static bundle
+## Static bundle (no build step)
 
-- **Build.** Plain HTML/CSS/JS with a small build step (esbuild or Vite) to
-  bundle modules and produce a hashed-filename output suitable for
-  long-cache static hosting. No framework — vanilla JS for the UI. (htmx
-  was on the table when we had a server; without one, it doesn't earn its
-  weight.)
-- **Service Worker.** Caches the app shell so the gallery loads offline.
-  Does not cache media bytes — those are large and the Range requests
-  videos use don't play well with naive SW caching.
-- **PWA manifest.** Installable on desktop and mobile.
+- **No bundler, no transpiler.** Plain HTML/CSS/JS shipped as-is. Modern
+  browsers — which we already require for the File System Access API —
+  handle native ES modules, dynamic `import()`, top-level await, module
+  Web Workers, and Service Workers without help.
+- **Vendored dependencies.** Anything we need from third parties
+  (`aws4fetch` is the only one expected for v1) lives committed under
+  `vendor/` as a static `.js` file. Same outcome as bundling, done once
+  by hand instead of by a tool every build. Keeps the CSP simple — no
+  third-party origins at runtime.
+- **No framework.** Vanilla JS modules for the UI. (htmx was on the
+  table when we had a server; without one, it doesn't earn its weight.)
+- **Cache busting.** The Service Worker controls app-shell versioning:
+  bump a constant in `sw.js`, the SW activates a new cache, and clients
+  pick up the new files on next load. No need for hashed filenames in
+  the static layout.
+- **Service Worker.** Hand-written `sw.js` that caches the app shell so
+  the gallery loads offline. Does not cache media bytes — those are
+  large and the Range requests videos use don't play well with naive SW
+  caching.
+- **PWA manifest.** Hand-written `manifest.webmanifest`. Installable on
+  desktop and mobile.
+- **Local dev.** Any static file server (`python -m http.server`,
+  `npx serve`, `caddy file-server`). No HMR — refresh the tab. For a
+  single-developer app this is fine; if it stops being fine we revisit.
 - **Hosting.** Anything static. The bucket itself works (with a website
   endpoint + CloudFront), but GitHub Pages or Cloudflare Pages are easier
   to start with.
+
+If the app outgrows this — many modules, TypeScript, real tree-shaking
+needs — adding a build tool later is straightforward; nothing about the
+runtime depends on the absence of one.
 
 ## Talking to S3
 

@@ -94,7 +94,9 @@ itself, ...).
 - **Credentials live in IndexedDB on the user's device.** Any XSS on this
   origin reads them. Mitigations:
   - Strict CSP (no inline scripts, no third-party origins).
-  - No third-party JS at runtime — bundle dependencies at build time.
+  - No third-party JS at runtime — dependencies are vendored as static
+    files under `vendor/` so every byte the browser executes ships from
+    our own origin.
   - Document the recommended IAM policy: scope to one bucket, allow only
     `GetObject`, `PutObject`, `ListBucket`, `DeleteObject`, `HeadObject`,
     and the multipart actions; deny everything else.
