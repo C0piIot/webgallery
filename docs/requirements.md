@@ -29,13 +29,21 @@ itself, ...).
   - Bucket name
   - Access key ID + secret access key
   - Path-style vs virtual-hosted style (auto-detected per provider, overridable)
+  - **Prefix** — a path the installation will namespace its uploads under.
+    Free-form (e.g. `phone`, `laptop`, `family-2024`). Two devices that
+    use *different* prefixes keep their files apart in the same bucket;
+    two devices that use the *same* prefix merge into one library, with
+    content-addressable keys keeping concurrent writes harmless.
   Credentials are stored in IndexedDB on the device and never leave the
   origin.
 - **Backup source.** Local folders the user grants access to via the
   File System Access API. A Web Worker walks the folders, hashes new files,
   and uploads them directly to S3 with SigV4 from the browser.
 - **Dedup.** Object keys are content-addressable
-  (`media/{sha256}.{ext}`). Re-uploading the same file is a no-op.
+  (`{prefix}/media/{sha256}.{ext}`). Re-uploading the same file is a
+  no-op. Dedup is per-prefix — the same photo backed up by two devices
+  under different prefixes will exist twice; under the same prefix,
+  once.
 - **Sync index.** IndexedDB caches `(path, size, mtime) → sha256` so
   re-running sync over an unchanged folder does no hashing and no S3 calls.
   Steady-state cost scales with *changes since last sync*, not library size.
@@ -98,10 +106,10 @@ itself, ...).
 
 ## Open questions
 
-- **Multiple devices / browsers.** Single user, but the user might run the
-  app from a phone *and* a laptop. We assume infrequent concurrent writes
-  and rely on content-addressable keys to make collisions harmless. Index
-  refresh strategy across devices is a follow-up.
+- **Viewing multiple prefixes from one device.** v1 shows the
+  installation's own prefix. Browsing files uploaded under a *different*
+  prefix from the same device (without changing the install's prefix) is
+  a follow-up — the data model already supports it.
 - **Encryption at rest beyond what S3 provides.** Client-side envelope
   encryption is possible but breaks browser-native playback of videos.
   Out of scope for v1.

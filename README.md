@@ -17,9 +17,12 @@ The user opens the PWA, picks an S3-compatible provider (AWS, R2, B2,
 MinIO, ...), and pastes their endpoint, bucket, and credentials. They grant
 the app access to one or more local folders via the File System Access API.
 A Web Worker walks those folders, hashes new or changed files, and uploads
-them straight to the bucket using SigV4 signing — keys are
-content-addressable (`media/{sha256}.{ext}`) so dedup is automatic. The
-gallery view lists the bucket and renders originals.
+them straight to the bucket using SigV4 signing under a user-chosen prefix
+— keys are content-addressable (`{prefix}/media/{sha256}.{ext}`) so dedup
+is automatic. Two devices that share a prefix merge into one library; two
+devices with different prefixes coexist in the same bucket without
+stepping on each other. The gallery view lists the prefix and renders
+originals.
 
 ## Stack (planned)
 

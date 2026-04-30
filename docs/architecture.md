@@ -30,11 +30,13 @@
               │  S3-compatible bucket      │
               │  (user-owned)              │
               │                            │
-              │  media/{sha256}.{ext}      │
+              │  {prefix}/media/           │
+              │     {sha256}.{ext}         │
               │    └─ x-amz-meta-*         │
               │       (capture date, name) │
               │                            │
-              │  index/YYYY-MM.json        │
+              │  {prefix}/index/           │
+              │     YYYY-MM.json           │
               │    (optional, future)      │
               └────────────────────────────┘
 ```
@@ -78,8 +80,15 @@ either on the user's device (IndexedDB) or in the user's bucket.
 
 ## Object layout
 
-- **Media objects.** `media/{sha256}.{ext}`
-  - Content-addressable, so dedup is automatic and re-uploads are no-ops.
+- **Media objects.** `{prefix}/media/{sha256}.{ext}`
+  - `{prefix}` is the user-chosen namespace from setup (e.g. `phone`,
+    `laptop`). Acts as a per-installation root so multiple devices can
+    share a bucket without coordination. Two devices that share a
+    prefix merge into one library; under content-addressable keys
+    those merges are conflict-free.
+  - Content-addressable, so dedup is automatic and re-uploads are no-ops
+    *within a prefix*. The same file under two different prefixes is
+    two objects.
   - Extension is derived from filename / content-type at upload time so
     the URL is intuitive and browsers infer the right MIME.
   - User-defined metadata set at PUT:
@@ -92,14 +101,14 @@ either on the user's device (IndexedDB) or in the user's bucket.
   the user's responsibility via bucket versioning / object-lock; not an
   app-level concern.
 - **Gallery index (future, when needed).** A sharded JSON index under
-  `index/YYYY-MM.json` updated as files arrive. Skips full
+  `{prefix}/index/YYYY-MM.json` updated as files arrive. Skips full
   `ListObjectsV2` walks on gallery load. Not in v1 — start with listing
-  the bucket and caching the result in IndexedDB.
+  the prefix and caching the result in IndexedDB.
 
 ## IndexedDB stores
 
-- `config` — selected provider, endpoint, region, bucket, access key,
-  secret. (Single record.)
+- `config` — selected provider, endpoint, region, bucket, prefix, access
+  key, secret. (Single record.)
 - `folders` — `FileSystemDirectoryHandle`s the user has granted access
   to, plus a friendly label.
 - `sync_index` — `(path, size, mtime) → sha256` records. The hot path
@@ -122,7 +131,7 @@ either on the user's device (IndexedDB) or in the user's bucket.
 4. For the resulting `sha256`, check `uploaded`:
    - Hit → already in bucket; just record `(path, size, mtime) → hash`
      in `sync_index`.
-   - Miss → `HEAD media/{sha256}.{ext}`:
+   - Miss → `HEAD {prefix}/media/{sha256}.{ext}`:
      - 200 → object exists; populate `uploaded`, then record in
        `sync_index`.
      - 404 → upload via PUT (or multipart for large files), set the
@@ -135,9 +144,9 @@ either on the user's device (IndexedDB) or in the user's bucket.
 ## Gallery flow
 
 1. On open, load `gallery_cache` from IndexedDB and render immediately.
-2. In the background, run `ListObjectsV2` over `media/`. Reconcile with
-   the cache — add new keys, drop missing ones — and re-render the
-   delta.
+2. In the background, run `ListObjectsV2` over `{prefix}/media/`.
+   Reconcile with the cache — add new keys, drop missing ones — and
+   re-render the delta.
 3. Detail view: `<img src="...">` or `<video src="...">` pointing at
    the bucket URL (or a presigned URL if the bucket isn't directly
    readable from the PWA's origin). Capture date and filename come
