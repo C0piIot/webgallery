@@ -455,4 +455,3 @@ export const sha512_256 = /* @__PURE__ */ createHasher(() => new _SHA512_256(),
  */
 export const sha512_224 = /* @__PURE__ */ createHasher(() => new _SHA512_224(), 
 /* @__PURE__ */ oidNist(0x05));
-//# sourceMappingURL=sha2.js.map

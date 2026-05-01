@@ -575,4 +575,3 @@ export const oidNist = (suffix) => ({
     // Larger suffix values would need base-128 OID encoding and a different length byte.
     oid: Uint8Array.from([0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, suffix]),
 });
-//# sourceMappingURL=utils.js.map

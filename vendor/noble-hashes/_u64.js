@@ -81,4 +81,3 @@ const u64 = {
 };
 // Default export mirrors named `u64` for compatibility with object-style imports.
 export default u64;
-//# sourceMappingURL=_u64.js.map

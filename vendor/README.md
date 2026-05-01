@@ -12,10 +12,14 @@ CDN — every byte the browser executes ships from this origin (see
 
 ## Updating
 
-1. Download the new file at the URL with the bumped version (no transformation).
+1. Download the new file at the URL with the bumped version.
 2. Overwrite the file in this directory.
-3. Bump the version in this README.
-4. Commit.
+3. Strip any trailing `//# sourceMappingURL=...` (or `/*# sourceMappingURL=...*/`
+   for CSS) comment — we don't vendor the corresponding `.map` files, and
+   the comment makes Vite (under Vitest) emit a noisy "Failed to load
+   source map" warning during CI.
+4. Bump the version in this README.
+5. Commit.
 
 Bootstrap's JavaScript bundle is intentionally **not** vendored — the app uses
 Bootstrap's CSS only. See the architecture doc *Static bundle* note for the
