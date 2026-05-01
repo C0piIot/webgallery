@@ -33,7 +33,8 @@ originals.
 - Vanilla JS, no build step. Native ES modules, hand-written Service
   Worker and PWA manifest, third-party deps vendored under `vendor/`.
 - Service Worker for offline app shell + PWA installability.
-- File System Access API for folder access (Chromium desktop only).
+- File System Access API for folder access (Chrome 132+, Android primary
+  + desktop secondary).
 - IndexedDB for credentials, sync index `(path,size,mtime)→hash`, and
   gallery cache.
 - `aws4fetch` (or equivalent ~5 KB SigV4 helper) for direct calls to any
@@ -41,8 +42,11 @@ originals.
 
 ## Caveats up front
 
-- Chromium desktop browsers only for folder sync; Safari/Firefox can use
-  the gallery and manual file uploads.
+- Chrome on Android (primary) + Chrome on desktop (secondary). Chrome
+  132+ required (FSA shipped on Android stable in Jan 2025). Other
+  engines are out of scope for v1.
+- Mobile-first UI; desktop renders acceptably but isn't optimized for
+  pointer interactions or large screens beyond a single breakpoint.
 - Credentials live in IndexedDB on the device. Strict CSP and bucket-scoped
   IAM are mandatory; documentation will spell out the recommended policy.
 - Sync runs while the tab is open; reliable background-while-closed isn't

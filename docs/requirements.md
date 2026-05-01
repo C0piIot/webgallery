@@ -56,13 +56,14 @@ itself, ...).
 - Multi-user, sharing, public links.
 - Thumbnails, web-sized derivatives, video transcoding. Gallery serves
   originals — fine for hundreds, will need revisiting at thousands.
-- Background sync while the browser tab is closed. Service Worker
-  Background Sync has tight quotas and platform gaps; sync runs while the
-  app is open.
-- Cross-browser parity. The File System Access API is Chromium-only on
-  desktop, so v1 targets Chrome / Edge / Brave. iOS and Firefox can still
-  use the gallery via fallback `<input type="file">` uploads but won't get
-  folder sync.
+- Background sync while the app is fully closed. Service Worker
+  `Periodic Background Sync` is a candidate v1.1 follow-up on Android
+  (it requires an installed PWA and fires opportunistically); v1 syncs
+  while the app is open.
+- Cross-browser parity. **v1 targets Chrome on Android as the primary
+  surface, with Chrome on desktop as a working secondary.** Firefox,
+  Safari, and other engines are out of scope. Min version is Chrome 132
+  (January 2025) — when File System Access shipped on Android stable.
 - Any first-party server. The app is purely a static bundle plus the
   user's bucket.
 

@@ -86,6 +86,14 @@ links — browser back/forward and bookmarks work without router code, and
 shared state lives in IndexedDB so page reloads don't lose anything that
 matters.
 
+**Mobile-first, desktop-acceptable.** Layouts target a phone in
+portrait by default (Chrome on Android is the primary surface) and use
+straightforward CSS — fluid widths, `min()` / `max()` constraints, a
+single breakpoint around tablet/desktop to widen and add a multi-column
+grid. Desktop should render acceptably without bespoke desktop chrome;
+the goal is "comfortable on a phone, fine on a laptop," not pixel
+parity across form factors.
+
 ### Pages
 
 - **`index.html`** — main view. Two tabs that share the same infinite
@@ -221,7 +229,11 @@ tab's status badges stay live without polling IndexedDB.
 
 1. Worker boots with the credentials and folder handles handed in from
    the main thread.
-2. Walk each folder recursively.
+2. Walk each folder recursively, **incrementally**: pull batches from
+   the directory's async iterator, process each batch, then yield
+   before the next pull. Never materialize the full file list. This is
+   non-negotiable for Android Chrome — large directories (a real DCIM)
+   can hang the browser if walked greedily.
 3. For each file emit `(path, size, mtime)`. Look up `sync_index`:
    - Hit → file is unchanged since last sync. Skip.
    - Miss → hash the file (streamed through `crypto.subtle.digest`).
@@ -286,9 +298,20 @@ touched.
 
 ## Known constraints / risks
 
-- **File System Access API is Chromium-only.** Safari and Firefox users
-  fall back to manual `<input type="file" multiple webkitdirectory>`
-  uploads — works but no automatic re-sync.
+- **Target is Chrome on Android (primary) + Chrome on desktop
+  (secondary).** Min version: Chrome 132 (January 2025), when File
+  System Access shipped on Android stable. Firefox, Safari, and other
+  engines are out of scope; the app should detect a missing
+  `showDirectoryPicker` and show a clear "unsupported browser" page
+  rather than silently degrading.
+- **Large folders can hang Android Chrome.** Per the Chromium
+  intent-to-ship, opening a directory with many files (think a real
+  DCIM with 10k+ photos) is known to make Android Chrome unresponsive.
+  Design rule: the worker walks directories *incrementally* — pulls
+  one batch from the async iterator, processes, yields, repeats —
+  and never materializes the full file list into memory. Progress
+  must be visible from the first batch, not buffered until the walk
+  completes.
 - **Credentials in the browser.** XSS on this origin = full bucket
   access. Strict CSP and no third-party runtime JS are non-negotiable.
   The recommended IAM policy is bucket-scoped and excludes
@@ -299,6 +322,8 @@ touched.
 - **Multipart cleanup.** Aborted multipart uploads accrue cost. We ship
   a recommended bucket lifecycle rule (`AbortIncompleteMultipartUpload`,
   N=7 days) for users to apply.
-- **Background sync.** Tab-must-be-open is acceptable for v1; full
-  background sync needs Service Worker `Background Sync`, which is
-  unreliable across browsers.
+- **Background sync.** Tab-must-be-open is acceptable for v1.
+  `Periodic Background Sync` on installed PWAs is a credible v1.1
+  follow-up on Chrome Android (lets the SW resume queued uploads on
+  occasional wake-ups); fires are opportunistic and throttled, so it's
+  a top-up, not a guarantee.
