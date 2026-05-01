@@ -1,5 +1,7 @@
 // Storage setup form. Reads/writes via lib/config.js, exercises the live
-// bucket via lib/bucket.js for the "Test connection" button.
+// bucket via lib/bucket.js for the "Test connection" button. The page
+// is intentionally FSA-independent (per docs/architecture.md per-surface
+// table) — it never calls into lib/folders.js.
 
 import './lib/register-sw.js';
 import {
@@ -10,6 +12,53 @@ import {
   ConfigError,
 } from './lib/config.js';
 import { createBucketClient, BucketError } from './lib/bucket.js';
+import { hashFile } from './lib/hash.js';
+import { uploadFile, keyFor } from './lib/upload.js';
+
+// E2E hooks. Only reachable when the page is loaded with ?e2e=1, so
+// they never appear in production loads. Used by e2e/upload.spec.js.
+if (new URL(location.href).searchParams.get('e2e') === '1') {
+  globalThis.__test_upload__ = async ({
+    name, content, byteCount, fill = 0xab, config, opts = {},
+  }) => {
+    let bytes;
+    if (typeof byteCount === 'number') {
+      // Generate in-page to avoid large-data IPC over Playwright.
+      bytes = new Uint8Array(byteCount).fill(fill);
+    } else if (typeof content === 'string') {
+      bytes = new TextEncoder().encode(content);
+    } else {
+      bytes = new Uint8Array(content);
+    }
+    const file = new Blob([bytes], { type: opts.contentType ?? '' });
+    const hash = await hashFile(file);
+    const entry = {
+      path: opts.path ?? `e2e/${name}`,
+      name,
+      size: file.size,
+      hash,
+      file,
+      capturedAt: opts.capturedAt,
+    };
+    const client = createBucketClient(config);
+    const result = await uploadFile(client, entry, {
+      prefix: opts.prefix ?? config.prefix,
+      threshold: opts.threshold,
+      partSize: opts.partSize,
+    });
+    return { result, key: keyFor(opts.prefix ?? config.prefix, hash, name) };
+  };
+
+  globalThis.__test_head__ = async ({ key, config }) => {
+    const client = createBucketClient(config);
+    return client.head(key);
+  };
+
+  globalThis.__test_delete__ = async ({ key, config }) => {
+    const client = createBucketClient(config);
+    return client.delete(key);
+  };
+}
 
 const PRESETS = {
   aws:    { endpoint: 'https://s3.amazonaws.com',                       pathStyle: false },

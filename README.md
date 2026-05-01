@@ -93,3 +93,26 @@ triggers `make lint test` — about 5 s once images are cached. Skip with
 Conventions for everyone — humans and AI agents — live in
 [`AGENTS.md`](./AGENTS.md). Read it before opening a PR. (`CLAUDE.md` is a
 symlink to the same file so Claude Code picks it up automatically.)
+
+## Recommended bucket setup
+
+The uploader uses S3 multipart for files larger than 50 MB. If a multipart
+upload is interrupted (network drop, browser tab closed mid-upload), the
+parts that were already uploaded sit in the bucket as orphaned chunks
+until cleaned up. Add this lifecycle rule to your bucket so they're
+auto-cleaned after seven days:
+
+```json
+{
+  "Rules": [
+    {
+      "ID": "abort-incomplete-multipart",
+      "Status": "Enabled",
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 7 }
+    }
+  ]
+}
+```
+
+Apply via your provider's console or CLI (e.g. `aws s3api
+put-bucket-lifecycle-configuration`, `mc ilm rule add`).
