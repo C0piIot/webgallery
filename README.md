@@ -32,13 +32,17 @@ originals.
   bucket gallery, infinite scroll).
 - Vanilla JS, no build step. Native ES modules, hand-written Service
   Worker and PWA manifest, third-party deps vendored under `vendor/`.
+- **Bootstrap 5** for all UI styling. No app-specific CSS file —
+  Bootstrap utilities and components only.
 - Service Worker for offline app shell + PWA installability.
 - File System Access API for folder access (Chrome 132+, Android primary
   + desktop secondary).
 - IndexedDB for credentials, sync index `(path,size,mtime)→hash`, and
   gallery cache.
-- `aws4fetch` (or equivalent ~5 KB SigV4 helper) for direct calls to any
-  S3-compatible endpoint.
+- `aws4fetch` (~5 KB) for SigV4 signing direct to any S3-compatible
+  endpoint.
+- **Hosted on GitHub Pages off `main`** — every push is the release.
+  Requires the repo to be public on a free GitHub plan.
 
 ## Caveats up front
 

@@ -50,13 +50,17 @@ either on the user's device (IndexedDB) or in the user's bucket.
   browsers — which we already require for the File System Access API —
   handle native ES modules, dynamic `import()`, top-level await, module
   Web Workers, and Service Workers without help.
-- **Vendored dependencies.** Anything we need from third parties
-  (`aws4fetch` is the only one expected for v1) lives committed under
-  `vendor/` as a static `.js` file. Same outcome as bundling, done once
-  by hand instead of by a tool every build. Keeps the CSP simple — no
-  third-party origins at runtime.
-- **No framework.** Vanilla JS modules for the UI. (htmx was on the
-  table when we had a server; without one, it doesn't earn its weight.)
+- **Vendored dependencies.** Everything third-party lives committed
+  under `vendor/` as static files. v1 vendors:
+  - `aws4fetch` — SigV4 signing
+  - **Bootstrap 5** CSS + JS bundle — UI framework
+  - **Bootstrap Icons** — status badges, nav, file-type glyphs
+  Same outcome as bundling, done once by hand instead of by a tool every
+  build. Keeps the CSP simple — no third-party origins at runtime.
+- **No JS framework; Bootstrap for CSS.** Vanilla JS modules for app
+  logic. UI styling and components come exclusively from Bootstrap —
+  see *Styling discipline* below. (htmx was on the table when we had
+  a server; without one, it doesn't earn its weight.)
 - **Cache busting.** The Service Worker controls app-shell versioning:
   bump a constant in `sw.js`, the SW activates a new cache, and clients
   pick up the new files on next load. No need for hashed filenames in
@@ -70,9 +74,18 @@ either on the user's device (IndexedDB) or in the user's bucket.
 - **Local dev.** Any static file server (`python -m http.server`,
   `npx serve`, `caddy file-server`). No HMR — refresh the tab. For a
   single-developer app this is fine; if it stops being fine we revisit.
-- **Hosting.** Anything static. The bucket itself works (with a website
-  endpoint + CloudFront), but GitHub Pages or Cloudflare Pages are easier
-  to start with.
+- **Hosting.** **GitHub Pages on this repository, for v1.** Pulled
+  straight from `main` — no separate deploy step, every push is the
+  release.
+  - On a free GitHub plan, Pages requires the **repo to be public**.
+    The repo will be flipped from private to public when we're ready
+    to publish; until then, the site is served by running a local
+    static file server.
+  - The runtime origin will be `https://c0piiot.github.io/webgallery/`
+    (or a custom domain later). The bucket's CORS allow-list and the
+    documented IAM policy must reference this origin.
+  - Other static hosts work without code changes (Cloudflare Pages,
+    the bucket itself, etc.) if we ever migrate.
 
 If the app outgrows this — many modules, TypeScript, real tree-shaking
 needs — adding a build tool later is straightforward; nothing about the
@@ -87,12 +100,29 @@ shared state lives in IndexedDB so page reloads don't lose anything that
 matters.
 
 **Mobile-first, desktop-acceptable.** Layouts target a phone in
-portrait by default (Chrome on Android is the primary surface) and use
-straightforward CSS — fluid widths, `min()` / `max()` constraints, a
-single breakpoint around tablet/desktop to widen and add a multi-column
-grid. Desktop should render acceptably without bespoke desktop chrome;
-the goal is "comfortable on a phone, fine on a laptop," not pixel
-parity across form factors.
+portrait by default (Chrome on Android is the primary surface). Desktop
+should render acceptably without bespoke desktop chrome; the goal is
+"comfortable on a phone, fine on a laptop," not pixel parity across
+form factors. Bootstrap's grid + breakpoint system handles the
+phone/desktop split out of the box.
+
+### Styling discipline
+
+All styling is **Bootstrap, only Bootstrap**. v1 ships **no
+app-specific CSS file**. If a layout can't be expressed with Bootstrap
+utilities and components, the answer is to rethink the layout, not
+to start writing custom CSS.
+
+- Use Bootstrap classes for spacing, typography, buttons, forms,
+  modals, navs, alerts, badges, cards, the grid, etc.
+- Theme via Bootstrap's CSS variables and `data-bs-theme` if we want
+  light/dark — no overrides.
+- Icons come from Bootstrap Icons (vendored), referenced by class
+  name on `<i>` elements.
+
+The goal is to keep CSS surface area at zero for v1. If we hit a real
+limit later (we won't, for this UI), we revisit the rule explicitly
+rather than accreting one-off styles.
 
 ### Pages
 
@@ -137,11 +167,15 @@ A small shared header in each page exposes nav between the three.
 /lib/sync-worker.js          # the actual Web Worker entry
 /lib/components/             # file-card.js, nav.js, tabs.js, ...
 
-/styles/base.css             # layout + typography
-/styles/components.css
-
-/vendor/aws4fetch.js         # vendored
+/vendor/aws4fetch.js
+/vendor/bootstrap.min.css
+/vendor/bootstrap.bundle.min.js
+/vendor/bootstrap-icons.css
+/vendor/fonts/               # Bootstrap Icons font files
 ```
+
+No `styles/` directory. If one ever appears in a PR, it's a smell
+worth questioning.
 
 Each page's bootstrap script imports only what it needs. The Service
 Worker pre-caches the union of these files as the app shell.
