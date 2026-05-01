@@ -167,6 +167,8 @@ A small shared header in each page exposes nav between the three.
 /lib/bucket.js               # BucketClient (wraps aws4fetch)
 /lib/sync.js                 # worker controller (start/stop, BroadcastChannel)
 /lib/sync-worker.js          # the actual Web Worker entry
+/lib/capability.js           # FSA-present check (boot-time, cached)
+/lib/connectivity.js         # navigator.onLine + online/offline events
 /lib/components/             # file-card.js, nav.js, tabs.js, ...
 
 /vendor/aws4fetch.js
@@ -193,6 +195,51 @@ If running-only-on-the-main-page proves limiting, a `SharedWorker` is
 the natural upgrade path — a single sync instance shared across all
 open pages of the app — but we want to validate FSA-handle permission
 behavior in that context before committing to it.
+
+## Capability and connectivity awareness
+
+The app is not all-or-nothing. Two runtime conditions gate features:
+
+### Capability check (static, at boot)
+
+A boot-time probe (`'showDirectoryPicker' in window`) sets a flag that
+the rest of the app reads. The flag never changes during a session.
+
+| Surface | FSA present | FSA absent |
+|---|---|---|
+| `index.html` Remote tab | Full functionality | Full functionality |
+| `index.html` Local tab | Full functionality | Tab still navigable; renders an explainer panel ("requires Chrome 132+ on Android or desktop"); no folder-walk runs |
+| `setup-storage.html` | Full functionality | Full functionality |
+| `setup-folders.html` | Full functionality | Renders the same explainer instead of the picker |
+| Sync worker | Started when folders configured | Never started |
+
+The header nav stays consistent across capabilities so the user is
+never staring at a missing menu item; the disabled surfaces explain
+what they need rather than redirect away.
+
+### Connectivity awareness (dynamic, at runtime)
+
+`lib/connectivity.js` exposes a small helper around `navigator.onLine`
+plus the `online` / `offline` window events. Subscribers get notified
+on transitions; the current value is cheap to read.
+
+- **Sync controller.** On `offline`, gracefully stops the upload
+  pipeline (any in-flight PUT is allowed to fail naturally and is
+  re-queued). On `online`, resumes from `sync_index` — durable per-file
+  state means no work is lost.
+- **Remote tab.** When offline, renders from `gallery_cache` and shows
+  an "offline" pill in the tab header. `ListObjectsV2` and detail
+  metadata fetches are deferred. When online, the cache is reconciled
+  in the background.
+- **Detail view.** Image / video bytes come from the bucket, so they
+  may fail to load offline. The card surfaces an inline placeholder
+  with a retry affordance instead of a broken icon.
+- **Setup pages.** Function fully offline (they only touch IndexedDB
+  and the local file system). The storage-setup "test connection"
+  button calls `HEAD` against the bucket; offline → clear error,
+  online → real result.
+- **Service Worker.** Caches the app shell so the bare site loads
+  offline. See *Static bundle* above.
 
 ## Talking to S3
 
@@ -259,7 +306,9 @@ behavior in that context before committing to it.
 
 The worker is owned by `index.html` (see *Sync trigger model* above). It
 posts progress updates to the page on a `BroadcastChannel` so the Local
-tab's status badges stay live without polling IndexedDB.
+tab's status badges stay live without polling IndexedDB. The worker is
+gated by both capability (FSA present) and connectivity (online); see
+*Capability and connectivity awareness* above.
 
 1. Worker boots with the credentials and folder handles handed in from
    the main thread.
@@ -292,16 +341,22 @@ fields the card surfaces.
 
 **Remote tab (the gallery).**
 1. On open, render from `gallery_cache` in IndexedDB immediately.
-2. In the background, run `ListObjectsV2` over `{prefix}/media/`.
-   Reconcile with the cache — add new keys, drop missing ones — and
-   re-render the delta.
+2. If online, in the background run `ListObjectsV2` over
+   `{prefix}/media/`. Reconcile with the cache — add new keys, drop
+   missing ones — and re-render the delta. If offline, skip the
+   reconcile and show an "offline" pill in the tab header.
 3. Detail view: `<img src="...">` or `<video src="...">` pointing at
    the bucket URL (or a presigned URL if the bucket isn't directly
    readable from the PWA's origin). Capture date and filename come
-   from `x-amz-meta-*` on a `HEAD` request, cached.
-4. Delete: `DELETE` the object, drop from caches, re-render.
+   from `x-amz-meta-*` on a `HEAD` request, cached. Offline → render
+   the card with an inline placeholder + retry affordance.
+4. Delete (online only): `DELETE` the object, drop from caches,
+   re-render.
 
-**Local tab (backup status).**
+**Local tab (backup status).** Works the same online or offline — all
+inputs are local. When FSA is unavailable, the tab renders the
+explainer panel from *Capability and connectivity awareness* instead.
+
 1. On open, render from the existing `sync_index` records — no new
    filesystem walk needed, the worker keeps these up to date.
 2. Each card shows: filename, source folder, size, capture date, and a
@@ -335,9 +390,11 @@ touched.
 - **Target is Chrome on Android (primary) + Chrome on desktop
   (secondary).** Min version: Chrome 132 (January 2025), when File
   System Access shipped on Android stable. Firefox, Safari, and other
-  engines are out of scope; the app should detect a missing
-  `showDirectoryPicker` and show a clear "unsupported browser" page
-  rather than silently degrading.
+  engines are out of scope for *backup* — but the app degrades
+  gracefully there: the Remote (gallery) tab and storage setup work
+  without FSA, while the Local tab and folder setup show an explainer
+  rather than failing or hiding. See *Capability and connectivity
+  awareness* for the surface-by-surface table.
 - **Large folders can hang Android Chrome.** Per the Chromium
   intent-to-ship, opening a directory with many files (think a real
   DCIM with 10k+ photos) is known to make Android Chrome unresponsive.

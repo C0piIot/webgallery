@@ -50,6 +50,23 @@ itself, ...).
 - **Gallery.** Browse, sort by capture date, view individual items.
   Capture date and original filename are stored in S3 user-defined object
   metadata at upload time so they survive a wiped IndexedDB.
+- **Graceful capability fallback.** Detected at load — if `File System
+  Access` is absent (older browsers, non-Chromium engines), the Remote
+  tab still renders the gallery, and the storage-setup page still works.
+  The Local tab, the folder-setup page, and the sync engine show a brief
+  explainer instead of failing or being hidden. The app is never blocked
+  behind a hard "unsupported" wall just because backup isn't available.
+- **Offline support.** The app is semi-functional without network:
+  - **Setup pages** (storage and folders) work fully — they only touch
+    IndexedDB and the local file system. The "test connection" button
+    obviously fails offline and surfaces that clearly.
+  - **Local tab** works fully — reads `sync_index` from IndexedDB and
+    walks granted folders.
+  - **Remote tab** renders from `gallery_cache` (last-known objects),
+    read-only, with an offline indicator. `ListObjectsV2` and detail
+    fetches are deferred until network returns.
+  - **Sync** pauses on `offline`, resumes on `online`. Per-file progress
+    is durable in IndexedDB, so resuming never loses ground.
 
 ## Out of scope (for now)
 
