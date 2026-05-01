@@ -4,6 +4,7 @@
 // table) — it never calls into lib/folders.js.
 
 import './lib/register-sw.js';
+import './lib/install.js';
 import {
   loadConfig,
   saveConfig,

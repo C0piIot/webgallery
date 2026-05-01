@@ -3,6 +3,7 @@
 // the Remote-tab gallery view backed by gallery_cache + ListObjectsV2.
 
 import './lib/register-sw.js';
+import './lib/install.js';
 import { hasFsa, renderFsaExplainer } from './lib/capability.js';
 import { loadConfig, hasConfig } from './lib/config.js';
 import { createSyncController } from './lib/sync.js';

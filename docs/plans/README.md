@@ -32,3 +32,4 @@ the same change that closes the issue.
 | [#18](https://github.com/C0piIot/webgallery/issues/18) | [Remote tab — ListObjectsV2 + gallery_cache + offline](./issue-18-remote-tab.md) |
 | [#19](https://github.com/C0piIot/webgallery/issues/19) | [Detail view + delete](./issue-19-detail.md) |
 | [#20](https://github.com/C0piIot/webgallery/issues/20) | [CSP meta + SW caching pass + update banner](./issue-20-csp-sw.md) |
+| [#21](https://github.com/C0piIot/webgallery/issues/21) | [PWA manifest icons + installability](./issue-21-icons.md) |

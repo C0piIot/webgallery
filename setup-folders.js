@@ -2,6 +2,7 @@
 // this file orchestrates clicks and renders.
 
 import './lib/register-sw.js';
+import './lib/install.js';
 import {
   addFolder,
   listFolders,
