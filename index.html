@@ -32,7 +32,17 @@
     </ul>
     <div class="tab-content border border-top-0 p-3">
       <div class="tab-pane" id="pane-local" role="tabpanel" aria-labelledby="tab-local">
-        <p class="text-muted mb-0">Local backup status — coming soon (see issue #17).</p>
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <div id="local-summary" class="text-muted small"></div>
+          <div class="btn-group btn-group-sm">
+            <button id="local-retry-errored" type="button" class="btn btn-outline-warning" disabled>Retry errored</button>
+            <button id="local-rewalk" type="button" class="btn btn-primary" disabled>Re-walk</button>
+          </div>
+        </div>
+        <div id="local-grid" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3"></div>
+        <div id="local-empty" class="text-muted text-center py-4 d-none">
+          Nothing indexed yet. Add a folder in Folders, then click Re-walk.
+        </div>
       </div>
       <div class="tab-pane" id="pane-remote" role="tabpanel" aria-labelledby="tab-remote">
         <p class="text-muted mb-0">Remote gallery — coming soon (see issue #18).</p>
