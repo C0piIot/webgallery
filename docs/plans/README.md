@@ -18,3 +18,4 @@ the same change that closes the issue.
 | [#4](https://github.com/C0piIot/webgallery/issues/4) | [Dev tooling — Docker compose + Vitest + Playwright](./issue-04-dev-tooling.md) |
 | [#5](https://github.com/C0piIot/webgallery/issues/5) | [GitHub Actions CI + pre-commit hook](./issue-05-ci.md) |
 | [#6](https://github.com/C0piIot/webgallery/issues/6) | [`lib/bucket.js` BucketClient over aws4fetch](./issue-06-bucket-client.md) |
+| [#7](https://github.com/C0piIot/webgallery/issues/7) | [`lib/config.js` load/save storage config + prefix](./issue-07-config.md) |
