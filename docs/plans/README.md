@@ -20,3 +20,4 @@ the same change that closes the issue.
 | [#6](https://github.com/C0piIot/webgallery/issues/6) | [`lib/bucket.js` BucketClient over aws4fetch](./issue-06-bucket-client.md) |
 | [#7](https://github.com/C0piIot/webgallery/issues/7) | [`lib/config.js` load/save storage config + prefix](./issue-07-config.md) |
 | [#8](https://github.com/C0piIot/webgallery/issues/8) | [`setup-storage.html` form + connection test](./issue-08-setup-storage.md) |
+| [#9](https://github.com/C0piIot/webgallery/issues/9) | [`lib/folders.js` FSA handle persistence + permission re-grant](./issue-09-folders.md) |

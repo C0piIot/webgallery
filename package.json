@@ -2,6 +2,7 @@
   "name": "webgallery",
   "private": true,
   "type": "module",
+  "license": "MIT",
   "scripts": {
     "lint": "find . \\( -path ./node_modules -o -path ./test-results -o -path ./playwright-report -o -path ./.git \\) -prune -o -name '*.js' -print | xargs -L1 node --check",
     "test": "vitest run",
