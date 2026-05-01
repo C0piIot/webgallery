@@ -26,6 +26,10 @@ originals.
 
 ## Stack (planned)
 
+- Multi-page app — three plain HTML pages (main view, storage setup,
+  folder setup), no SPA router. Main view has two tabs: **Local** (files
+  from configured folders, with backup status) and **Remote** (the
+  bucket gallery, infinite scroll).
 - Vanilla JS, no build step. Native ES modules, hand-written Service
   Worker and PWA manifest, third-party deps vendored under `vendor/`.
 - Service Worker for offline app shell + PWA installability.

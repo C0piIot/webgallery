@@ -78,6 +78,80 @@ If the app outgrows this — many modules, TypeScript, real tree-shaking
 needs — adding a build tool later is straightforward; nothing about the
 runtime depends on the absence of one.
 
+## UI structure (multi-page, not SPA)
+
+The app is a small set of plain HTML pages. Each page is self-contained
+and bootstrapped by a sibling ES module. Navigation is regular `<a>`
+links — browser back/forward and bookmarks work without router code, and
+shared state lives in IndexedDB so page reloads don't lose anything that
+matters.
+
+### Pages
+
+- **`index.html`** — main view. Two tabs that share the same infinite
+  scroll surface:
+  - **Local** — files walked from the configured local folders, each
+    rendered with its backup status (uploaded / pending / uploading /
+    error). Driven by IndexedDB's `sync_index` plus live updates from
+    the sync worker.
+  - **Remote** — every object in `{prefix}/media/` in the bucket, sorted
+    by capture date. This is the gallery. Local availability of a file
+    has no effect on whether it shows here.
+  Tab state is reflected in the URL (`?tab=local` / `?tab=remote`) so
+  refreshes and bookmarks are stable. If no storage config exists, the
+  page redirects to `setup-storage.html`; if no folders are configured,
+  the Local tab prompts the user to add some.
+- **`setup-storage.html`** — provider, endpoint, region, bucket, prefix,
+  credentials. Validates by issuing a test request against the bucket
+  before saving.
+- **`setup-folders.html`** — picks `FileSystemDirectoryHandle`s,
+  re-grants permissions, and lists currently registered folders.
+
+A small shared header in each page exposes nav between the three.
+
+### File layout
+
+```
+/index.html                  # main view (Local | Remote)
+/index.js                    # bootstrap for index.html
+/setup-storage.html
+/setup-storage.js
+/setup-folders.html
+/setup-folders.js
+/sw.js                       # Service Worker
+/manifest.webmanifest
+
+/lib/db.js                   # IndexedDB wrappers
+/lib/config.js               # load/save storage config + prefix
+/lib/folders.js              # FSA handle persistence + permission re-grant
+/lib/bucket.js               # BucketClient (wraps aws4fetch)
+/lib/sync.js                 # worker controller (start/stop, BroadcastChannel)
+/lib/sync-worker.js          # the actual Web Worker entry
+/lib/components/             # file-card.js, nav.js, tabs.js, ...
+
+/styles/base.css             # layout + typography
+/styles/components.css
+
+/vendor/aws4fetch.js         # vendored
+```
+
+Each page's bootstrap script imports only what it needs. The Service
+Worker pre-caches the union of these files as the app shell.
+
+### Sync trigger model
+
+The sync worker is started by `index.js` when the main page loads (and
+storage + folders are configured). It runs as long as the main page is
+open, regardless of which tab is active — so opening the Remote tab
+doesn't pause backup. Setup pages don't run sync. Closing or navigating
+away from the main page tears the worker down; durable state is in
+IndexedDB, so progress is never lost.
+
+If running-only-on-the-main-page proves limiting, a `SharedWorker` is
+the natural upgrade path — a single sync instance shared across all
+open pages of the app — but we want to validate FSA-handle permission
+behavior in that context before committing to it.
+
 ## Talking to S3
 
 - **SigV4 in the browser.** Use a small SigV4 implementation
@@ -141,6 +215,10 @@ runtime depends on the absence of one.
 
 ## Sync flow (Web Worker)
 
+The worker is owned by `index.html` (see *Sync trigger model* above). It
+posts progress updates to the page on a `BroadcastChannel` so the Local
+tab's status badges stay live without polling IndexedDB.
+
 1. Worker boots with the credentials and folder handles handed in from
    the main thread.
 2. Walk each folder recursively.
@@ -160,17 +238,41 @@ runtime depends on the absence of one.
    backoff; a file that fails repeatedly is reported and the worker
    moves on rather than wedging the whole sync.
 
-## Gallery flow
+## Main page flow
 
-1. On open, load `gallery_cache` from IndexedDB and render immediately.
+The Local and Remote tabs share the same infinite-scroll surface and the
+same file-card component; what differs is the data source and which
+fields the card surfaces.
+
+**Remote tab (the gallery).**
+1. On open, render from `gallery_cache` in IndexedDB immediately.
 2. In the background, run `ListObjectsV2` over `{prefix}/media/`.
    Reconcile with the cache — add new keys, drop missing ones — and
    re-render the delta.
 3. Detail view: `<img src="...">` or `<video src="...">` pointing at
    the bucket URL (or a presigned URL if the bucket isn't directly
    readable from the PWA's origin). Capture date and filename come
-   from a `HEAD` request, cached.
+   from `x-amz-meta-*` on a `HEAD` request, cached.
 4. Delete: `DELETE` the object, drop from caches, re-render.
+
+**Local tab (backup status).**
+1. On open, render from the existing `sync_index` records — no new
+   filesystem walk needed, the worker keeps these up to date.
+2. Each card shows: filename, source folder, size, capture date, and a
+   status badge driven by the worker's live messages on the
+   `BroadcastChannel`:
+   - **Uploaded** — `(path,size,mtime)` resolves to a hash that's in
+     `uploaded` (or HEAD returned 200).
+   - **Pending** — known but not yet processed by the current worker
+     pass.
+   - **Uploading** — currently in flight; per-byte progress visible.
+   - **Error** — last attempt failed; tooltip carries the reason.
+3. The user can retry a single errored file or trigger a full re-walk
+   from a control on the tab header.
+
+Both tabs share the same delete affordance on the card. Deleting from
+the Local tab only removes it from the bucket; the local file is never
+touched.
 
 ## Why these choices (vs. the previous server-backed design)
 
