@@ -16,3 +16,4 @@ the same change that closes the issue.
 | [#2](https://github.com/C0piIot/webgallery/issues/2) | [PWA manifest + Service Worker app-shell cache](./issue-02-pwa-manifest-sw.md) |
 | [#3](https://github.com/C0piIot/webgallery/issues/3) | [`lib/db.js` IndexedDB wrapper + unit tests](./issue-03-lib-db.md) |
 | [#4](https://github.com/C0piIot/webgallery/issues/4) | [Dev tooling — Docker compose + Vitest + Playwright](./issue-04-dev-tooling.md) |
+| [#5](https://github.com/C0piIot/webgallery/issues/5) | [GitHub Actions CI + pre-commit hook](./issue-05-ci.md) |

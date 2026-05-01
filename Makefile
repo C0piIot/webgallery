@@ -1,7 +1,11 @@
-.PHONY: install test test-watch e2e shell up down clean logs
+.PHONY: install lint test test-watch e2e shell up down clean logs
 
 install:
 	docker compose run --rm tools npm install
+	git config core.hooksPath .githooks
+
+lint:
+	docker compose run --rm tools npm run lint
 
 test:
 	docker compose run --rm tools npm test

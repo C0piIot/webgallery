@@ -81,3 +81,15 @@ The static server is exposed on host port **8888** by default
 (http://localhost:8888 once `make up` is running). Override with
 `WEBGALLERY_STATIC_PORT=...` if 8888 is taken on your machine. MinIO is on
 **9000** (S3 API) and **9001** (admin console).
+
+### Pre-commit hook
+
+`make install` configures git to use `.githooks/`. Committing then
+triggers `make lint test` — about 5 s once images are cached. Skip with
+`git commit --no-verify` only for genuine emergencies.
+
+### Working on this repo (incl. AI agents)
+
+Conventions for everyone — humans and AI agents — live in
+[`AGENTS.md`](./AGENTS.md). Read it before opening a PR. (`CLAUDE.md` is a
+symlink to the same file so Claude Code picks it up automatically.)
