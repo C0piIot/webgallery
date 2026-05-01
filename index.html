@@ -61,6 +61,29 @@
     </div>
   </main>
 
+  <dialog id="detail-dialog" class="rounded p-0 border-0"
+          style="max-width: min(95vw, 800px); width: 100%;">
+    <div class="d-flex justify-content-between align-items-center p-3 border-bottom gap-2">
+      <h5 id="detail-filename" class="mb-0 text-truncate flex-grow-1">—</h5>
+      <button id="detail-close" type="button" class="btn-close" aria-label="Close"></button>
+    </div>
+    <div class="p-3">
+      <div id="detail-media" class="ratio ratio-16x9 bg-light mb-3"></div>
+      <dl class="row mb-0 small">
+        <dt class="col-4 col-sm-3">Captured</dt>
+        <dd id="detail-captured" class="col-8 col-sm-9 mb-2">—</dd>
+        <dt class="col-4 col-sm-3">Source</dt>
+        <dd id="detail-source" class="col-8 col-sm-9 mb-2 text-truncate">—</dd>
+        <dt class="col-4 col-sm-3">Size</dt>
+        <dd id="detail-size" class="col-8 col-sm-9 mb-0">—</dd>
+      </dl>
+    </div>
+    <div class="d-flex justify-content-end gap-2 p-3 border-top">
+      <button id="detail-delete" type="button" class="btn btn-danger" disabled>Delete</button>
+      <button id="detail-close-bottom" type="button" class="btn btn-secondary">Close</button>
+    </div>
+  </dialog>
+
   <script type="module" src="./index.js"></script>
 </body>
 </html>

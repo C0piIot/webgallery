@@ -30,3 +30,4 @@ the same change that closes the issue.
 | [#16](https://github.com/C0piIot/webgallery/issues/16) | [Retry/backoff + per-file error states](./issue-16-retry.md) |
 | [#17](https://github.com/C0piIot/webgallery/issues/17) | [Local tab — sync_index render + live status badges](./issue-17-local-tab.md) |
 | [#18](https://github.com/C0piIot/webgallery/issues/18) | [Remote tab — ListObjectsV2 + gallery_cache + offline](./issue-18-remote-tab.md) |
+| [#19](https://github.com/C0piIot/webgallery/issues/19) | [Detail view + delete](./issue-19-detail.md) |

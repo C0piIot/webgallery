@@ -262,6 +262,7 @@ async function bootstrapRemoteTab() {
   setupInfiniteScroll();
   wireConnectivity();
   wireRefresh();
+  wireDetailDialog();
   await maybeBuildClient();
   // Auto-reconcile on first open if online + configured.
   if (isOnline() && client) {
@@ -368,6 +369,160 @@ async function bootstrapRemoteTab() {
       refreshBtn.disabled = !isOnline() || !client;
     }
   }
+
+  // --- Detail view (lives inside bootstrapRemoteTab so it shares
+  //     `client`, `allRecords`, `rendered`, updateEmpty, updateSummary). ---
+
+  let currentDetailKey = null;
+  const headCache = new Map();
+
+  function wireDetailDialog() {
+    // Card click delegation.
+    grid.addEventListener('click', (e) => {
+      const col = e.target.closest('.col[data-key]');
+      if (!col) return;
+      openDetail(col.dataset.key);
+    });
+
+    const dialog = document.getElementById('detail-dialog');
+    document.getElementById('detail-close').addEventListener('click', () => dialog.close());
+    document.getElementById('detail-close-bottom').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', (e) => {
+      if (e.target === dialog) dialog.close();
+    });
+    dialog.addEventListener('close', () => {
+      currentDetailKey = null;
+      // Stop any video playback when the dialog closes.
+      const video = document.querySelector('#detail-media video');
+      if (video) {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+      }
+    });
+
+    document.getElementById('detail-delete').addEventListener('click', onDelete);
+  }
+
+  async function openDetail(key) {
+    const record = allRecords.find((r) => r.key === key);
+    if (!record) return;
+    currentDetailKey = key;
+
+    const filenameFromKey = key.split('/').pop();
+    setText('detail-filename', filenameFromKey);
+    setText('detail-size', formatBytes(record.size));
+    setText(
+      'detail-captured',
+      record.lastModified
+        ? new Date(record.lastModified).toLocaleString()
+        : '—',
+    );
+    setText('detail-source', '—');
+
+    document.getElementById('detail-delete').disabled = !isOnline() || !client;
+
+    await renderDetailMedia(record);
+    document.getElementById('detail-dialog').showModal();
+
+    // Async: HEAD for x-amz-meta-* and refine displayed metadata.
+    if (isOnline() && client) {
+      refineFromHead(key, record).catch(() => { /* keep what we have */ });
+    }
+  }
+
+  async function renderDetailMedia(record) {
+    const container = document.getElementById('detail-media');
+    container.replaceChildren();
+    const filename = record.key.split('/').pop();
+    const isVideo = /\.(mp4|mov|webm|m4v|avi)$/i.test(filename);
+
+    if (!isOnline() || !client) {
+      const div = document.createElement('div');
+      div.className =
+        'd-flex align-items-center justify-content-center h-100 fs-5 text-muted';
+      div.textContent = 'Offline — connect to load preview';
+      container.appendChild(div);
+      return;
+    }
+
+    let src;
+    try {
+      src = await client.presignGet(record.key);
+    } catch {
+      const div = document.createElement('div');
+      div.className =
+        'd-flex align-items-center justify-content-center h-100 fs-5 text-muted';
+      div.textContent = 'Could not sign URL';
+      container.appendChild(div);
+      return;
+    }
+
+    if (isVideo) {
+      const video = document.createElement('video');
+      video.controls = true;
+      video.src = src;
+      video.style.width = '100%';
+      video.style.height = '100%';
+      container.appendChild(video);
+    } else {
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = filename;
+      img.style.objectFit = 'contain';
+      img.style.width = '100%';
+      img.style.height = '100%';
+      container.appendChild(img);
+    }
+  }
+
+  async function refineFromHead(key, record) {
+    if (key !== currentDetailKey) return;
+    let head = headCache.get(key);
+    if (!head) {
+      head = await client.head(key);
+      headCache.set(key, head);
+    }
+    if (key !== currentDetailKey) return;
+    const meta = head.metadata ?? {};
+    if (meta.filename) setText('detail-filename', meta.filename);
+    if (meta['captured-at']) {
+      const d = new Date(meta['captured-at']);
+      if (!Number.isNaN(d.getTime())) {
+        setText('detail-captured', d.toLocaleString());
+      }
+    }
+    if (meta['source-path']) setText('detail-source', meta['source-path']);
+    // Prefer the HEAD-reported size if it differs (rare).
+    if (typeof head.size === 'number') {
+      setText('detail-size', formatBytes(head.size));
+    }
+  }
+
+  async function onDelete() {
+    const key = currentDetailKey;
+    if (!key) return;
+    const filename = key.split('/').pop();
+    if (!confirm(`Delete ${filename}? This is permanent.`)) return;
+    try {
+      await client.delete(key);
+      await db.del('gallery_cache', key);
+      headCache.delete(key);
+      document.getElementById('detail-dialog').close();
+      grid.querySelector(`[data-key="${cssEscape(key)}"]`)?.remove();
+      allRecords = allRecords.filter((r) => r.key !== key);
+      rendered = Math.min(rendered, allRecords.length);
+      updateEmpty();
+      updateSummary();
+    } catch (err) {
+      alert(`Delete failed: ${err?.message ?? err}`);
+    }
+  }
+}
+
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
 }
 
 function renderRemoteCard(record, client) {
@@ -377,6 +532,7 @@ function renderRemoteCard(record, client) {
   const col = document.createElement('div');
   col.className = 'col';
   col.dataset.key = record.key;
+  col.style.cursor = 'pointer';
 
   const card = document.createElement('div');
   card.className = 'card h-100';
