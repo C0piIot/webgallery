@@ -24,3 +24,4 @@ the same change that closes the issue.
 | [#10](https://github.com/C0piIot/webgallery/issues/10) | [`setup-folders.html` picker / list / remove](./issue-10-setup-folders.md) |
 | [#11](https://github.com/C0piIot/webgallery/issues/11) | [`lib/capability.js` + graceful FSA-missing gating](./issue-11-capability.md) |
 | [#12](https://github.com/C0piIot/webgallery/issues/12) | [Incremental directory walker (batched, yielding)](./issue-12-walker.md) |
+| [#13](https://github.com/C0piIot/webgallery/issues/13) | [Streamed file hasher (sha256)](./issue-13-hash.md) |

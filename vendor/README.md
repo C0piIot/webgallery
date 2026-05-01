@@ -8,6 +8,7 @@ CDN — every byte the browser executes ships from this origin (see
 |---|---|---|
 | `bootstrap.min.css` | https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css | 5.3.8 |
 | `aws4fetch.js` | https://cdn.jsdelivr.net/npm/aws4fetch@1.0.20/dist/aws4fetch.esm.mjs | 1.0.20 |
+| `noble-hashes/{sha2,_md,_u64,utils}.js` | https://cdn.jsdelivr.net/npm/@noble/hashes@2.2.0/{file}.js | 2.2.0 |
 
 ## Updating
 
