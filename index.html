@@ -45,7 +45,18 @@
         </div>
       </div>
       <div class="tab-pane" id="pane-remote" role="tabpanel" aria-labelledby="tab-remote">
-        <p class="text-muted mb-0">Remote gallery — coming soon (see issue #18).</p>
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <div id="remote-summary" class="text-muted small"></div>
+          <div class="d-flex align-items-center gap-2">
+            <span id="remote-offline-pill" class="badge bg-warning text-dark d-none">⚠️ Offline</span>
+            <button id="remote-refresh" type="button" class="btn btn-sm btn-primary" disabled>Refresh</button>
+          </div>
+        </div>
+        <div id="remote-grid" class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3"></div>
+        <div id="remote-sentinel" style="height: 1px;"></div>
+        <div id="remote-empty" class="text-muted text-center py-4 d-none">
+          Nothing in the bucket yet. Upload something from the Local tab.
+        </div>
       </div>
     </div>
   </main>

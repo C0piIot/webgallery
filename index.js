@@ -1,11 +1,14 @@
-// Bootstrap for index.html. Tab toggle, FSA gate, and the Local-tab
-// card grid driven live by the sync worker's BroadcastChannel events.
-// The Remote tab is still a placeholder until #18.
+// Bootstrap for index.html. Tab toggle, FSA gate, the Local-tab card
+// grid driven live by the sync worker's BroadcastChannel events, and
+// the Remote-tab gallery view backed by gallery_cache + ListObjectsV2.
 
 import './lib/register-sw.js';
 import { hasFsa, renderFsaExplainer } from './lib/capability.js';
-import { hasConfig } from './lib/config.js';
+import { loadConfig, hasConfig } from './lib/config.js';
 import { createSyncController } from './lib/sync.js';
+import { createBucketClient } from './lib/bucket.js';
+import { reconcile } from './lib/remote-list.js';
+import { isOnline, onChange as onConnectivityChange } from './lib/connectivity.js';
 import * as db from './lib/db.js';
 
 const TABS = ['local', 'remote'];
@@ -28,12 +31,14 @@ for (const t of TABS) {
 showTab(new URL(location.href).searchParams.get('tab') || 'local');
 
 // FSA-missing path: replace the Local pane content with the standard
-// explainer and stop. Remote tab keeps working.
+// explainer. Remote tab keeps working regardless.
 if (!hasFsa()) {
   renderFsaExplainer(document.getElementById('pane-local'));
 } else {
   bootstrapLocalTab();
 }
+
+bootstrapRemoteTab();
 
 // --- Local tab ---
 
@@ -233,4 +238,183 @@ function cssEscape(s) {
     return CSS.escape(s);
   }
   return String(s).replace(/[^a-zA-Z0-9_-]/g, (ch) => `\\${ch}`);
+}
+
+// --- Remote tab ---
+
+const REMOTE_PAGE = 30;
+
+async function bootstrapRemoteTab() {
+  const grid = document.getElementById('remote-grid');
+  const empty = document.getElementById('remote-empty');
+  const summary = document.getElementById('remote-summary');
+  const sentinel = document.getElementById('remote-sentinel');
+  const refreshBtn = document.getElementById('remote-refresh');
+  const offlinePill = document.getElementById('remote-offline-pill');
+
+  let allRecords = [];
+  let rendered = 0;
+  let client = null;
+  let prefix = null;
+  let refreshing = false;
+
+  await initialRender();
+  setupInfiniteScroll();
+  wireConnectivity();
+  wireRefresh();
+  await maybeBuildClient();
+  // Auto-reconcile on first open if online + configured.
+  if (isOnline() && client) {
+    runReconcile();
+  }
+
+  async function maybeBuildClient() {
+    if (!(await hasConfig())) return;
+    const config = await loadConfig();
+    client = createBucketClient(config);
+    prefix = config.prefix;
+    refreshBtn.disabled = !isOnline();
+  }
+
+  async function initialRender() {
+    allRecords = [];
+    await db.iterate('gallery_cache', (r) => allRecords.push(r));
+    sortRecords();
+    grid.replaceChildren();
+    rendered = 0;
+    renderNextBatch();
+    updateEmpty();
+    updateSummary();
+  }
+
+  function sortRecords() {
+    allRecords.sort((a, b) => {
+      const ka = a.lastModified ?? '';
+      const kb = b.lastModified ?? '';
+      return ka < kb ? 1 : ka > kb ? -1 : 0;
+    });
+  }
+
+  function renderNextBatch() {
+    if (!client && allRecords.length > 0) {
+      // Cards need a client to presign thumbs; if no config yet, wait.
+      // Render placeholder cards so the grid still shows something.
+    }
+    const end = Math.min(rendered + REMOTE_PAGE, allRecords.length);
+    const frag = document.createDocumentFragment();
+    for (let i = rendered; i < end; i++) {
+      frag.appendChild(renderRemoteCard(allRecords[i], client));
+    }
+    grid.appendChild(frag);
+    rendered = end;
+  }
+
+  function setupInfiniteScroll() {
+    if (!('IntersectionObserver' in globalThis)) return;
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && rendered < allRecords.length) {
+          renderNextBatch();
+        }
+      }
+    }, { rootMargin: '200px' });
+    io.observe(sentinel);
+  }
+
+  function updateEmpty() {
+    empty.classList.toggle('d-none', allRecords.length > 0);
+  }
+
+  function updateSummary(extra) {
+    const base = `${allRecords.length} object${allRecords.length === 1 ? '' : 's'}`;
+    summary.textContent = extra ? `${base} · ${extra}` : base;
+  }
+
+  function wireConnectivity() {
+    function syncOfflineUi() {
+      const online = isOnline();
+      offlinePill.classList.toggle('d-none', online);
+      refreshBtn.disabled = !online || !client;
+    }
+    syncOfflineUi();
+    onConnectivityChange((online) => {
+      syncOfflineUi();
+      if (online && client) runReconcile();
+    });
+  }
+
+  function wireRefresh() {
+    refreshBtn.addEventListener('click', () => runReconcile());
+  }
+
+  async function runReconcile() {
+    if (refreshing) return;
+    if (!client) {
+      await maybeBuildClient();
+      if (!client) return;
+    }
+    refreshing = true;
+    refreshBtn.disabled = true;
+    try {
+      await reconcile(client, prefix, db);
+      // Re-read the cache and re-render the grid (simpler than diffing
+      // already-rendered nodes; the data is small enough).
+      await initialRender();
+      updateSummary('refreshed just now');
+    } catch (err) {
+      updateSummary(`refresh failed: ${err?.message ?? err}`);
+    } finally {
+      refreshing = false;
+      refreshBtn.disabled = !isOnline() || !client;
+    }
+  }
+}
+
+function renderRemoteCard(record, client) {
+  const filename = record.key.split('/').pop();
+  const isVideo = /\.(mp4|mov|webm|m4v|avi)$/i.test(filename);
+
+  const col = document.createElement('div');
+  col.className = 'col';
+  col.dataset.key = record.key;
+
+  const card = document.createElement('div');
+  card.className = 'card h-100';
+
+  const thumb = document.createElement('div');
+  thumb.className = 'ratio ratio-1x1 bg-light';
+  if (isVideo) {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'd-flex align-items-center justify-content-center fs-1';
+    placeholder.textContent = '🎬';
+    thumb.appendChild(placeholder);
+  } else if (client) {
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.alt = filename;
+    img.style.objectFit = 'cover';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    client.presignGet(record.key).then((src) => {
+      img.src = src;
+    }).catch(() => {});
+    thumb.appendChild(img);
+  } else {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'd-flex align-items-center justify-content-center fs-1';
+    placeholder.textContent = '🖼️';
+    thumb.appendChild(placeholder);
+  }
+  card.appendChild(thumb);
+
+  const meta = document.createElement('div');
+  meta.className = 'card-body p-2 small text-muted';
+  const date = record.lastModified
+    ? new Date(record.lastModified).toLocaleDateString()
+    : '—';
+  meta.textContent = `${date} · ${formatBytes(record.size)}`;
+  card.appendChild(meta);
+
+  col.appendChild(card);
+  return col;
 }

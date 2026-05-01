@@ -221,4 +221,14 @@ describe('lib/bucket.js', () => {
     expect(firstReq().method).toBe('DELETE');
     expect(new URL(firstReq().url).searchParams.get('uploadId')).toBe('UP1');
   });
+
+  test('presignGet: returns a SigV4 query-signed URL pointing at the key', async () => {
+    const client = createBucketClient(baseConfig);
+    const url = new URL(await client.presignGet('media/abc.jpg', 600));
+    // Path-or-host depending on style; either way, the key path is there.
+    expect(url.pathname.endsWith('/media/abc.jpg')).toBe(true);
+    expect(url.searchParams.get('X-Amz-Algorithm')).toBe('AWS4-HMAC-SHA256');
+    expect(url.searchParams.get('X-Amz-Signature')).toBeTruthy();
+    expect(url.searchParams.get('X-Amz-Expires')).toBe('600');
+  });
 });

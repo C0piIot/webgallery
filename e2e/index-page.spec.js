@@ -31,9 +31,13 @@ test('Remote tab is unaffected when FSA is missing', async ({ page }) => {
   await deleteFsa(page);
   await page.goto('/');
   await page.getByRole('tab', { name: 'Remote' }).click();
-  // Today the Remote pane is a placeholder; the point is it loads
-  // without the FSA explainer ever appearing.
-  await expect(page.locator('#pane-remote')).toContainText(/coming soon/i);
+  // Remote pane has its own controls (Refresh + offline pill + grid)
+  // and does NOT show the FSA explainer — that's the point of the
+  // graceful-degradation rule.
+  await expect(page.locator('#remote-refresh')).toBeVisible();
+  await expect(page.locator('#pane-remote')).not.toContainText(
+    /needs File System Access/i,
+  );
 });
 
 test('Storage page works fully when FSA is missing', async ({ page }) => {
