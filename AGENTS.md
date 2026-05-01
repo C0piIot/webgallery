@@ -47,6 +47,15 @@ Bump `VERSION` in [`sw.js`](./sw.js) whenever a file in the `SHELL` array
 changes — added, removed, or contents changed. Skipping bumps strands
 users on stale caches.
 
+## Capability gating
+
+`hasFsa()` from [`lib/capability.js`](./lib/capability.js) is the single
+source of truth for "does this browser support File System Access". Any
+surface that depends on FSA — the Local tab, the folder-setup page, and
+the sync controller (when it lands) — checks `hasFsa()` and falls back
+to `renderFsaExplainer(target)` for the standard panel. Don't accumulate
+parallel checks elsewhere.
+
 ## Issue / commit hygiene
 
 - One coherent chunk per commit. End the commit message with `Closes #N`

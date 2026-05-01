@@ -13,6 +13,7 @@
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "fake-indexeddb": "^6.2.5",
+    "happy-dom": "^20.9.0",
     "vitest": "^4.1.5"
   }
 }

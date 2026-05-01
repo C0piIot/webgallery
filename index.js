@@ -1,10 +1,16 @@
-// Bootstrap for index.html. Real behavior (Local sync_index render, Remote
-// gallery, infinite scroll) lands in issues #17 and #18. For now, this only
-// handles the Local/Remote tab toggle.
+// Bootstrap for index.html. Real Local/Remote tab behavior lands in
+// issues #17 and #18. For now this handles the tab toggle and the
+// FSA-missing fallback for the Local tab (per docs/architecture.md →
+// Capability and connectivity awareness).
 
 import './lib/register-sw.js';
+import { hasFsa, renderFsaExplainer } from './lib/capability.js';
 
 const TABS = ['local', 'remote'];
+
+if (!hasFsa()) {
+  renderFsaExplainer(document.getElementById('pane-local'));
+}
 
 function showTab(name) {
   if (!TABS.includes(name)) name = 'local';

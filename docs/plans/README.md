@@ -22,3 +22,4 @@ the same change that closes the issue.
 | [#8](https://github.com/C0piIot/webgallery/issues/8) | [`setup-storage.html` form + connection test](./issue-08-setup-storage.md) |
 | [#9](https://github.com/C0piIot/webgallery/issues/9) | [`lib/folders.js` FSA handle persistence + permission re-grant](./issue-09-folders.md) |
 | [#10](https://github.com/C0piIot/webgallery/issues/10) | [`setup-folders.html` picker / list / remove](./issue-10-setup-folders.md) |
+| [#11](https://github.com/C0piIot/webgallery/issues/11) | [`lib/capability.js` + graceful FSA-missing gating](./issue-11-capability.md) |

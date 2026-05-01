@@ -32,10 +32,14 @@ function makePermissionHandle({ name = 'Photos', perm = 'granted' } = {}) {
 }
 
 describe('lib/folders.js', () => {
-  test('isFsaAvailable: false when showDirectoryPicker missing, true when present', async () => {
+  test('isFsaAvailable: false when showDirectoryPicker missing', async () => {
     const { isFsaAvailable } = await import('../../lib/folders.js');
     expect(isFsaAvailable()).toBe(false);
+  });
+
+  test('isFsaAvailable: true when showDirectoryPicker present', async () => {
     globalThis.showDirectoryPicker = vi.fn();
+    const { isFsaAvailable } = await import('../../lib/folders.js');
     expect(isFsaAvailable()).toBe(true);
   });
 

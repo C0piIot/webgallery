@@ -3,12 +3,12 @@
 
 import './lib/register-sw.js';
 import {
-  isFsaAvailable,
   addFolder,
   listFolders,
   removeFolder,
   ensurePermissions,
 } from './lib/folders.js';
+import { hasFsa, renderFsaExplainer } from './lib/capability.js';
 
 // E2E injection hook. When the page is loaded with ?e2e=1, expose a
 // helper that lets Playwright tests substitute showDirectoryPicker with
@@ -27,11 +27,11 @@ if (new URL(location.href).searchParams.get('e2e') === '1') {
 
 const $ = (id) => document.getElementById(id);
 
+const contentEl = $('content');
 const addBtn = $('add-btn');
 const addError = $('add-error');
 const foldersEl = $('folders');
 const emptyEl = $('empty');
-const unsupportedEl = $('unsupported');
 
 function showError(msg) {
   addError.textContent = msg;
@@ -141,12 +141,11 @@ async function onRemove(id) {
 }
 
 (async function bootstrap() {
-  if (!isFsaAvailable()) {
-    unsupportedEl.classList.remove('d-none');
-    addBtn.disabled = true;
-  } else {
-    addBtn.addEventListener('click', onAdd);
+  if (!hasFsa()) {
+    renderFsaExplainer(contentEl);
+    return;
   }
+  addBtn.addEventListener('click', onAdd);
   foldersEl.addEventListener('click', (e) => {
     const regrant = e.target.closest('[data-action="regrant"]');
     if (regrant) return onRegrant(Number(regrant.dataset.id));

@@ -28,20 +28,17 @@
       once per session, so re-granting after a fresh page load is normal.
     </p>
 
-    <div id="unsupported" class="alert alert-warning d-none" role="alert">
-      File System Access is not available in this browser. Folder backup is
-      disabled — the gallery still works.
-    </div>
+    <div id="content">
+      <div class="d-flex gap-2 align-items-center">
+        <button id="add-btn" type="button" class="btn btn-primary">+ Add folder</button>
+      </div>
+      <div id="add-error" class="text-danger small mt-2 d-none"></div>
 
-    <div class="d-flex gap-2 align-items-center">
-      <button id="add-btn" type="button" class="btn btn-primary">+ Add folder</button>
-    </div>
-    <div id="add-error" class="text-danger small mt-2 d-none"></div>
+      <div id="folders" class="list-group mt-3"></div>
 
-    <div id="folders" class="list-group mt-3"></div>
-
-    <div id="empty" class="text-muted text-center py-4 d-none">
-      No folders configured. Add one to start backup.
+      <div id="empty" class="text-muted text-center py-4 d-none">
+        No folders configured. Add one to start backup.
+      </div>
     </div>
   </main>
 

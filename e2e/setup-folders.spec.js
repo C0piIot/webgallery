@@ -48,3 +48,15 @@ test('two folders, remove one, the other survives', async ({ page }) => {
     page.locator('.list-group-item').filter({ hasText: 'folder-b' }),
   ).toBeVisible();
 });
+
+test('shows the FSA explainer when File System Access is missing', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    delete window.showDirectoryPicker;
+  });
+  await page.goto('/setup-folders.html');
+  await expect(page.getByText(/needs File System Access/i)).toBeVisible();
+  // The Add button is gone — replaced by the explainer panel.
+  await expect(page.getByRole('button', { name: /add folder/i })).toHaveCount(0);
+});

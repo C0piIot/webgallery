@@ -191,6 +191,11 @@ doesn't pause backup. Setup pages don't run sync. Closing or navigating
 away from the main page tears the worker down; durable state is in
 IndexedDB, so progress is never lost.
 
+The controller honors `hasFsa()` from `lib/capability.js` — when the
+browser doesn't support File System Access, the worker is never started
+at all. Same source of truth as the per-surface explainer panels
+(*Capability and connectivity awareness* below).
+
 If running-only-on-the-main-page proves limiting, a `SharedWorker` is
 the natural upgrade path — a single sync instance shared across all
 open pages of the app — but we want to validate FSA-handle permission
