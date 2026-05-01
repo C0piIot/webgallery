@@ -1,0 +1,11 @@
+{
+  "name": "webgallery",
+  "short_name": "webgallery",
+  "description": "Personal photo and video gallery + backup. No backend.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#212529",
+  "background_color": "#ffffff"
+}

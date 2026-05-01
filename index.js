@@ -2,6 +2,8 @@
 // gallery, infinite scroll) lands in issues #17 and #18. For now, this only
 // handles the Local/Remote tab toggle.
 
+import './lib/register-sw.js';
+
 const TABS = ['local', 'remote'];
 
 function showTab(name) {
