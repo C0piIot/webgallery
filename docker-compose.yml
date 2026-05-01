@@ -1,0 +1,52 @@
+services:
+  tools:
+    image: mcr.microsoft.com/playwright:v1.59.1-noble
+    working_dir: /repo
+    volumes:
+      - .:/repo
+      - tools_node_modules:/repo/node_modules
+    environment:
+      PLAYWRIGHT_BASE_URL: http://static:8080
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: test-bucket
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    # No depends_on — Makefile brings up static/minio explicitly for E2E.
+
+  static:
+    image: caddy:2-alpine
+    command: caddy file-server --listen :8080 --root /repo
+    volumes:
+      - .:/repo:ro
+    ports:
+      # Host port is configurable so it doesn't clash with whatever else
+      # is listening locally. Container always serves on :8080; tests use
+      # http://static:8080 (internal DNS), independent of the host port.
+      - "${WEBGALLERY_STATIC_PORT:-8888}:8080"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_API_CORS_ALLOW_ORIGIN: "*"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on: [minio]
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 minioadmin minioadmin >/dev/null 2>&1; do sleep 1; done;
+      mc mb -p local/test-bucket >/dev/null;
+      echo 'minio init complete';
+      "
+
+volumes:
+  tools_node_modules:
+  minio_data:

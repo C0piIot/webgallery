@@ -10,6 +10,8 @@ Status: early design. No code yet — see [`docs/`](./docs).
   shouldn't do.
 - [`docs/architecture.md`](./docs/architecture.md) — system layout, object
   layout, sync flow, and the tradeoffs.
+- [`docs/plans/`](./docs/plans/) — per-issue design log: the plan that was
+  approved before each issue's implementation.
 
 ## How it works (in one paragraph)
 
@@ -55,3 +57,27 @@ originals.
   IAM are mandatory; documentation will spell out the recommended policy.
 - Sync runs while the tab is open; reliable background-while-closed isn't
   feasible cross-browser today.
+
+## Running tests locally
+
+All test commands run inside Docker — no Node required on the host.
+
+```sh
+make install   # one-time: install dev deps into a docker volume
+make test      # Vitest unit tests
+make e2e       # Playwright E2E (brings up static + minio)
+```
+
+| Target | What it does |
+|---|---|
+| `make install` | `npm install` inside the `tools` container |
+| `make test` | Run Vitest unit tests |
+| `make e2e` | Bring up static server + MinIO, run Playwright |
+| `make shell` | Open a bash shell in the `tools` container |
+| `make up` / `make down` | Start / stop the long-running services |
+| `make clean` | `down -v` — wipe volumes (`node_modules`, MinIO data) |
+
+The static server is exposed on host port **8888** by default
+(http://localhost:8888 once `make up` is running). Override with
+`WEBGALLERY_STATIC_PORT=...` if 8888 is taken on your machine. MinIO is on
+**9000** (S3 API) and **9001** (admin console).
