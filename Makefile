@@ -14,7 +14,7 @@ test-watch:
 	docker compose run --rm tools npm run test:watch
 
 e2e:
-	docker compose up -d static minio minio-init
+	docker compose up -d minio minio-init
 	docker compose run --rm tools npm run e2e
 
 shell:

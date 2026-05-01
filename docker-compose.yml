@@ -6,22 +6,25 @@ services:
       - .:/repo
       - tools_node_modules:/repo/node_modules
     environment:
-      PLAYWRIGHT_BASE_URL: http://static:8080
+      # Playwright launches its own static server on localhost:8080 inside
+      # this container (see playwright.config.js → webServer). The page
+      # origin is then http://localhost:8080, a secure context, so
+      # crypto.subtle (used by aws4fetch's SigV4 HMAC) is available.
       MINIO_ENDPOINT: http://minio:9000
       MINIO_BUCKET: test-bucket
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
-    # No depends_on — Makefile brings up static/minio explicitly for E2E.
+    # No depends_on — Makefile brings up minio explicitly for E2E.
 
+  # Static server for human-side dev access at localhost:8888. Not used
+  # by E2E — Playwright starts its own server inside the tools container
+  # so the page origin is localhost (a secure context).
   static:
     image: caddy:2-alpine
     command: caddy file-server --listen :8080 --root /repo
     volumes:
       - .:/repo:ro
     ports:
-      # Host port is configurable so it doesn't clash with whatever else
-      # is listening locally. Container always serves on :8080; tests use
-      # http://static:8080 (internal DNS), independent of the host port.
       - "${WEBGALLERY_STATIC_PORT:-8888}:8080"
 
   minio:

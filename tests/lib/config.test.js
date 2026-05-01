@@ -73,14 +73,22 @@ describe('lib/config.js', () => {
     expect(errors.find((e) => e.field === 'endpoint')).toBeDefined();
   });
 
-  test('validateConfig allows http://localhost but rejects http:// elsewhere', async () => {
+  test('validateConfig allows http:// for local hosts; rejects public http://', async () => {
     const { validateConfig } = await import('../../lib/config.js');
+    // Loopback + single-label + .local all accepted (Docker, k8s, mDNS).
     expect(
       validateConfig({ ...validConfig(), endpoint: 'http://localhost:9000' }),
     ).toEqual([]);
     expect(
       validateConfig({ ...validConfig(), endpoint: 'http://127.0.0.1:9000' }),
     ).toEqual([]);
+    expect(
+      validateConfig({ ...validConfig(), endpoint: 'http://minio:9000' }),
+    ).toEqual([]);
+    expect(
+      validateConfig({ ...validConfig(), endpoint: 'http://nas.local:9000' }),
+    ).toEqual([]);
+    // Anything with a dot that isn't .local still needs https://.
     const bad = validateConfig({
       ...validConfig(),
       endpoint: 'http://example.com',

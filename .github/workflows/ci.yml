@@ -38,18 +38,16 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Bring up static + MinIO
-        run: docker compose up -d static minio minio-init
-      - name: Wait for static server
-        run: |
-          for i in $(seq 1 30); do
-            curl -fsS http://localhost:8888 >/dev/null && break
-            sleep 1
-          done
+      - name: Bring up MinIO
+        run: docker compose up -d minio minio-init
       - name: Run Playwright
+        # Playwright starts its own static server (see playwright.config.js).
         run: npm run e2e
         env:
-          PLAYWRIGHT_BASE_URL: http://localhost:8888
+          MINIO_ENDPOINT: http://localhost:9000
+          MINIO_BUCKET: test-bucket
+          MINIO_ACCESS_KEY: minioadmin
+          MINIO_SECRET_KEY: minioadmin
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
