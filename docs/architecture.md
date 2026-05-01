@@ -54,9 +54,12 @@ either on the user's device (IndexedDB) or in the user's bucket.
   under `vendor/` as static files. v1 vendors:
   - `aws4fetch` — SigV4 signing
   - **Bootstrap 5** CSS + JS bundle — UI framework
-  - **Bootstrap Icons** — status badges, nav, file-type glyphs
   Same outcome as bundling, done once by hand instead of by a tool every
   build. Keeps the CSP simple — no third-party origins at runtime.
+- **Icons are emojis.** Status badges, nav, file-type glyphs all use
+  Unicode emoji rendered by the OS — no icon font, no SVG sprite, no
+  extra vendored asset. Acceptable consistency on Chrome / Android
+  (our primary surface).
 - **No JS framework; Bootstrap for CSS.** Vanilla JS modules for app
   logic. UI styling and components come exclusively from Bootstrap —
   see *Styling discipline* below. (htmx was on the table when we had
@@ -117,8 +120,7 @@ to start writing custom CSS.
   modals, navs, alerts, badges, cards, the grid, etc.
 - Theme via Bootstrap's CSS variables and `data-bs-theme` if we want
   light/dark — no overrides.
-- Icons come from Bootstrap Icons (vendored), referenced by class
-  name on `<i>` elements.
+- Icons are Unicode emoji inlined in the markup — no icon font.
 
 The goal is to keep CSS surface area at zero for v1. If we hit a real
 limit later (we won't, for this UI), we revisit the rule explicitly
@@ -170,8 +172,6 @@ A small shared header in each page exposes nav between the three.
 /vendor/aws4fetch.js
 /vendor/bootstrap.min.css
 /vendor/bootstrap.bundle.min.js
-/vendor/bootstrap-icons.css
-/vendor/fonts/               # Bootstrap Icons font files
 ```
 
 No `styles/` directory. If one ever appears in a PR, it's a smell
