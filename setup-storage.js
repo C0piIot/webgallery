@@ -58,6 +58,80 @@ if (new URL(location.href).searchParams.get('e2e') === '1') {
     const client = createBucketClient(config);
     return client.delete(key);
   };
+
+  // Helpers for the sync e2e: persist config + folder handles, then run
+  // a full sync against MinIO and resolve when the worker reports
+  // completion.
+  globalThis.__test_save_config__ = async (config) => {
+    const { saveConfig, clearConfig } = await import('./lib/config.js');
+    await clearConfig();
+    await saveConfig(config);
+  };
+
+  globalThis.__test_seed_folder__ = async ({ folderName, files }) => {
+    // Build an OPFS subdirectory and write each file's contents into it.
+    const root = await navigator.storage.getDirectory();
+    try {
+      await root.removeEntry(folderName, { recursive: true });
+    } catch {
+      /* fresh */
+    }
+    const folder = await root.getDirectoryHandle(folderName, { create: true });
+    for (const { name, content } of files) {
+      const fh = await folder.getFileHandle(name, { create: true });
+      const w = await fh.createWritable();
+      await w.write(
+        typeof content === 'string' ? content : new Uint8Array(content),
+      );
+      await w.close();
+    }
+    // Wipe any folders left from a previous run, then register this one.
+    const { listFolders, removeFolder, addFolder } = await import(
+      './lib/folders.js'
+    );
+    for (const f of await listFolders()) await removeFolder(f.id);
+    globalThis.showDirectoryPicker = async () => folder;
+    await addFolder(folderName);
+  };
+
+  globalThis.__test_clear_sync_index__ = async () => {
+    const db = await import('./lib/db.js');
+    await db.tx(['sync_index'], 'readwrite', async (t) => {
+      const keys = [];
+      await t.sync_index.iterate((v) => {
+        keys.push(v.path);
+      });
+      for (const k of keys) await t.sync_index.del(k);
+    });
+  };
+
+  globalThis.__test_sync_run__ = async () => {
+    const { createSyncController } = await import('./lib/sync.js');
+    const controller = createSyncController();
+    const events = [];
+    return new Promise((resolve, reject) => {
+      const ch = new BroadcastChannel('webgallery:sync');
+      const timeout = setTimeout(() => {
+        ch.close();
+        controller.stop();
+        reject(new Error('sync timed out'));
+      }, 30_000);
+      ch.onmessage = (e) => {
+        events.push(e.data);
+        if (
+          e.data.type === 'state' &&
+          e.data.state === 'idle' &&
+          e.data.reason === 'completed'
+        ) {
+          clearTimeout(timeout);
+          ch.close();
+          controller.stop();
+          resolve(events);
+        }
+      };
+      controller.start();
+    });
+  };
 }
 
 const PRESETS = {
