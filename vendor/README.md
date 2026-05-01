@@ -1,0 +1,21 @@
+# vendor/
+
+Third-party dependencies vendored as static files. The runtime never reaches a
+CDN — every byte the browser executes ships from this origin (see
+`docs/architecture.md` *Static bundle*).
+
+| File | Source | Version |
+|---|---|---|
+| `bootstrap.min.css` | https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css | 5.3.8 |
+| `aws4fetch.js` | https://cdn.jsdelivr.net/npm/aws4fetch@1.0.20/dist/aws4fetch.esm.mjs | 1.0.20 |
+
+## Updating
+
+1. Download the new file at the URL with the bumped version (no transformation).
+2. Overwrite the file in this directory.
+3. Bump the version in this README.
+4. Commit.
+
+Bootstrap's JavaScript bundle is intentionally **not** vendored — the app uses
+Bootstrap's CSS only. See the architecture doc *Static bundle* note for the
+rationale.

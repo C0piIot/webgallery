@@ -4,29 +4,40 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <title>webgallery</title>
-  <style>
-    body {
-      font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      margin: 0;
-      padding: 2rem 1.25rem;
-      max-width: 36rem;
-      color: #1a1a1a;
-    }
-    h1 { margin-top: 0; }
-    code { background: #f0f0f0; padding: 0.1em 0.3em; border-radius: 3px; }
-    a { color: #0a58ca; }
-  </style>
+  <title>webgallery — Gallery</title>
+  <link rel="stylesheet" href="./vendor/bootstrap.min.css">
 </head>
 <body>
-  <h1>webgallery</h1>
-  <p>A static <abbr title="Progressive Web App">PWA</abbr> that doubles
-    as a personal photo and video gallery and a backup tool. There is no
-    backend &mdash; the app talks straight to an S3-compatible bucket
-    you provide.</p>
-  <p>Under construction. Design docs and progress live in
-    <a href="https://github.com/C0piIot/webgallery">the repository</a>.</p>
-  <p><small>This page is a placeholder so the GitHub Pages deploy has
-    something to serve. The real app will replace it.</small></p>
+  <nav class="navbar navbar-expand navbar-dark bg-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="./index.html">webgallery</a>
+      <ul class="navbar-nav">
+        <li class="nav-item"><a class="nav-link active" aria-current="page" href="./index.html">Gallery</a></li>
+        <li class="nav-item"><a class="nav-link" href="./setup-storage.html">Storage</a></li>
+        <li class="nav-item"><a class="nav-link" href="./setup-folders.html">Folders</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="container py-3">
+    <ul class="nav nav-tabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-local" data-tab="local" type="button" role="tab" aria-controls="pane-local">Local</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-remote" data-tab="remote" type="button" role="tab" aria-controls="pane-remote">Remote</button>
+      </li>
+    </ul>
+    <div class="tab-content border border-top-0 p-3">
+      <div class="tab-pane" id="pane-local" role="tabpanel" aria-labelledby="tab-local">
+        <p class="text-muted mb-0">Local backup status — coming soon (see issue #17).</p>
+      </div>
+      <div class="tab-pane" id="pane-remote" role="tabpanel" aria-labelledby="tab-remote">
+        <p class="text-muted mb-0">Remote gallery — coming soon (see issue #18).</p>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="./index.js"></script>
 </body>
 </html>
