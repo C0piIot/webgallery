@@ -63,3 +63,28 @@ test('Local tab renders a card per file with the right badges after a sync', asy
     );
   }
 });
+
+test('Local tab shows the offline pill and disables Re-walk while offline', async ({
+  page, context,
+}) => {
+  // Just need a config saved so the redirect doesn't fire.
+  await page.goto('/setup-storage.html?e2e=1');
+  await page.evaluate(async (config) => {
+    await window.__test_save_config__(config);
+  }, MINIO);
+
+  await page.goto('/index.html?tab=local');
+
+  // Online: pill hidden, Re-walk enabled.
+  await expect(page.locator('#local-offline-pill')).toBeHidden();
+  await expect(page.locator('#local-rewalk')).toBeEnabled();
+
+  await context.setOffline(true);
+  await expect(page.locator('#local-offline-pill')).toBeVisible();
+  await expect(page.locator('#local-rewalk')).toBeDisabled();
+  await expect(page.locator('#local-retry-errored')).toBeDisabled();
+
+  await context.setOffline(false);
+  await expect(page.locator('#local-offline-pill')).toBeHidden();
+  await expect(page.locator('#local-rewalk')).toBeEnabled();
+});

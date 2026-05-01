@@ -33,3 +33,4 @@ the same change that closes the issue.
 | [#19](https://github.com/C0piIot/webgallery/issues/19) | [Detail view + delete](./issue-19-detail.md) |
 | [#20](https://github.com/C0piIot/webgallery/issues/20) | [CSP meta + SW caching pass + update banner](./issue-20-csp-sw.md) |
 | [#21](https://github.com/C0piIot/webgallery/issues/21) | [PWA manifest icons + installability](./issue-21-icons.md) |
+| [#22](https://github.com/C0piIot/webgallery/issues/22) | [Empty / error / loading states sweep](./issue-22-states.md) |

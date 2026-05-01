@@ -54,10 +54,13 @@ test('Remote tab renders cards, transitions to offline, refreshes on reconnect',
   await expect(page.locator('#remote-refresh')).toBeDisabled();
   await expect(page.locator('#remote-grid .col')).toHaveCount(3);
 
-  // Back online → pill hides, Refresh re-enables.
+  // Back online → pill hides, Refresh re-enables and shows the
+  // resting "Refresh" label (verified post-reconcile, since the
+  // "Refreshing…" state is too brief to assert reliably).
   await context.setOffline(false);
   await expect(page.locator('#remote-offline-pill')).toBeHidden();
   await expect(page.locator('#remote-refresh')).toBeEnabled();
+  await expect(page.locator('#remote-refresh')).toHaveText('Refresh');
 
   // Cleanup.
   await page.goto('/setup-storage.html?e2e=1');

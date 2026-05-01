@@ -26,6 +26,10 @@
   </nav>
 
   <main class="container py-3" style="max-width: 36rem;">
+    <div id="welcome-alert" class="alert alert-info alert-dismissible d-none" role="alert">
+      Welcome — set up your bucket connection to get started.
+      <button id="welcome-dismiss" type="button" class="btn-close" aria-label="Close"></button>
+    </div>
     <h1 class="h4 mb-3">Storage</h1>
     <p class="text-muted small">
       Connect to your S3-compatible bucket. Credentials are stored locally

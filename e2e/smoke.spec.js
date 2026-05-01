@@ -4,10 +4,30 @@
 
 import { test, expect } from '@playwright/test';
 
+const MINIO = {
+  endpoint: process.env.MINIO_ENDPOINT || 'http://localhost:9000',
+  region: 'us-east-1',
+  bucket: process.env.MINIO_BUCKET || 'test-bucket',
+  prefix: 'e2e-smoke',
+  accessKeyId: process.env.MINIO_ACCESS_KEY || 'minioadmin',
+  secretAccessKey: process.env.MINIO_SECRET_KEY || 'minioadmin',
+  pathStyle: true,
+};
+
+// /index.html now redirects to setup-storage when no config is saved
+// (see issue #22). Seed a config so the gallery actually loads.
+async function seedConfig(page) {
+  await page.goto('/setup-storage.html?e2e=1');
+  await page.evaluate(async (config) => {
+    await window.__test_save_config__(config);
+  }, MINIO);
+}
+
 // Each nav link is matched by its exact accessible name to avoid the
 // substring overlap with the "webgallery" brand text.
 
 test('home page loads with active Gallery nav', async ({ page }) => {
+  await seedConfig(page);
   await page.goto('/');
   await expect(
     page.getByRole('link', { name: 'Gallery', exact: true }),
@@ -30,6 +50,7 @@ test('folders setup page loads with active Folders nav', async ({ page }) => {
 
 test('Local/Remote tabs switch and update URL', async ({ page }) => {
   // Tab buttons carry role="tab", not role="button".
+  await seedConfig(page);
   await page.goto('/');
   await page.getByRole('tab', { name: 'Remote' }).click();
   await expect(page.getByRole('tab', { name: 'Remote' })).toHaveClass(/active/);

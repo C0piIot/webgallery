@@ -31,15 +31,24 @@ for (const t of TABS) {
 }
 showTab(new URL(location.href).searchParams.get('tab') || 'local');
 
-// FSA-missing path: replace the Local pane content with the standard
-// explainer. Remote tab keeps working regardless.
-if (!hasFsa()) {
-  renderFsaExplainer(document.getElementById('pane-local'));
-} else {
-  bootstrapLocalTab();
-}
-
-bootstrapRemoteTab();
+// Welcome funnel: if no storage config exists, send the user to
+// setup-storage with a flag the page reads to show a welcome banner.
+// `replace` instead of `assign` so the back button doesn't bounce
+// back to a useless gallery.
+(async function welcomeRedirect() {
+  if (!(await hasConfig())) {
+    location.replace('./setup-storage.html?welcome=1');
+    return;
+  }
+  // FSA-missing path: replace the Local pane content with the standard
+  // explainer. Remote tab keeps working regardless.
+  if (!hasFsa()) {
+    renderFsaExplainer(document.getElementById('pane-local'));
+  } else {
+    bootstrapLocalTab();
+  }
+  bootstrapRemoteTab();
+})();
 
 // --- Local tab ---
 
@@ -75,11 +84,13 @@ async function bootstrapLocalTab() {
   const summary = document.getElementById('local-summary');
   const rewalkBtn = document.getElementById('local-rewalk');
   const retryBtn = document.getElementById('local-retry-errored');
+  const offlinePill = document.getElementById('local-offline-pill');
 
   const controller = createSyncController();
 
   await refreshGrid();
   await wireControls();
+  wireConnectivityLocal();
   subscribeBroadcast();
 
   async function refreshGrid() {
@@ -94,7 +105,7 @@ async function bootstrapLocalTab() {
   }
 
   async function wireControls() {
-    const ready = await hasConfig();
+    const ready = (await hasConfig()) && isOnline();
     rewalkBtn.disabled = !ready;
     retryBtn.disabled = !ready;
     rewalkBtn.addEventListener('click', () => {
@@ -119,13 +130,30 @@ async function bootstrapLocalTab() {
     });
   }
 
+  function wireConnectivityLocal() {
+    function syncUi() {
+      const online = isOnline();
+      offlinePill.classList.toggle('d-none', online);
+      // Disable Re-walk + Retry while offline; the worker would just
+      // pause waiting for connectivity to come back.
+      hasConfig().then((ok) => {
+        rewalkBtn.disabled = !ok || !online;
+        retryBtn.disabled = !ok || !online;
+      });
+    }
+    syncUi();
+    onConnectivityChange(syncUi);
+  }
+
   function subscribeBroadcast() {
     controller.on('*', (msg) => {
       if (msg.type === 'state') {
         if (msg.state === 'idle' && msg.reason === 'completed') {
-          // Refresh card statuses from sync_index in case any uploads
-          // updated while we weren't listening for the specific event.
           refreshGrid();
+        } else if (msg.state === 'idle' && msg.reason === 'no-folders') {
+          summary.textContent = 'No folders configured. Add one in Folders.';
+        } else if (msg.state === 'idle' && msg.reason === 'no-config') {
+          summary.textContent = 'No bucket configured. Set it up in Storage.';
         }
       } else if (msg.type === 'progress') {
         const phase = msg.phase === 'hashing' ? 'hashing' : 'uploading';
@@ -357,16 +385,17 @@ async function bootstrapRemoteTab() {
     }
     refreshing = true;
     refreshBtn.disabled = true;
+    refreshBtn.textContent = 'Refreshing…';
+    summary.textContent = 'Refreshing…';
     try {
       await reconcile(client, prefix, db);
-      // Re-read the cache and re-render the grid (simpler than diffing
-      // already-rendered nodes; the data is small enough).
       await initialRender();
       updateSummary('refreshed just now');
     } catch (err) {
       updateSummary(`refresh failed: ${err?.message ?? err}`);
     } finally {
       refreshing = false;
+      refreshBtn.textContent = 'Refresh';
       refreshBtn.disabled = !isOnline() || !client;
     }
   }
@@ -554,7 +583,9 @@ function renderRemoteCard(record, client) {
     img.style.height = '100%';
     client.presignGet(record.key).then((src) => {
       img.src = src;
-    }).catch(() => {});
+    }).catch((err) => {
+      console.warn('presign failed for', record.key, err);
+    });
     thumb.appendChild(img);
   } else {
     const placeholder = document.createElement('div');

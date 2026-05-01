@@ -149,6 +149,18 @@ const PRESET_ENDPOINTS = new Set(
 
 const $ = (id) => document.getElementById(id);
 
+// Welcome banner — shown when arriving from the index page's no-config
+// redirect (?welcome=1). Click the X to dismiss; closing just removes
+// the element since we don't ship Bootstrap's JS for the auto-handler.
+{
+  const isWelcome = new URL(location.href).searchParams.get('welcome') === '1';
+  const alert = $('welcome-alert');
+  if (isWelcome && alert) {
+    alert.classList.remove('d-none');
+    $('welcome-dismiss')?.addEventListener('click', () => alert.remove());
+  }
+}
+
 const form = $('storage-form');
 const providerEl = $('provider');
 const endpointEl = $('endpoint');

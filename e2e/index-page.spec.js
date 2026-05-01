@@ -19,16 +19,34 @@ async function deleteFsa(page) {
   });
 }
 
+async function seedConfig(page) {
+  // The index page now redirects to setup-storage when no config is
+  // saved. These FSA tests are about UI gating, not the welcome funnel,
+  // so seed a config first via the ?e2e=1 helpers.
+  await page.goto('/setup-storage.html?e2e=1');
+  await page.evaluate(async (config) => {
+    await window.__test_save_config__(config);
+  }, MINIO);
+}
+
+test('/ redirects to setup-storage when no config is saved', async ({ page }) => {
+  await page.goto('/');
+  await expect(page).toHaveURL(/setup-storage\.html\?welcome=1$/);
+  await expect(page.locator('#welcome-alert')).toBeVisible();
+});
+
 test('Local tab shows the FSA explainer when File System Access is missing', async ({
   page,
 }) => {
   await deleteFsa(page);
+  await seedConfig(page);
   await page.goto('/?tab=local');
   await expect(page.getByText(/needs File System Access/i)).toBeVisible();
 });
 
 test('Remote tab is unaffected when FSA is missing', async ({ page }) => {
   await deleteFsa(page);
+  await seedConfig(page);
   await page.goto('/');
   await page.getByRole('tab', { name: 'Remote' }).click();
   // Remote pane has its own controls (Refresh + offline pill + grid)
