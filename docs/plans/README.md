@@ -27,3 +27,4 @@ the same change that closes the issue.
 | [#13](https://github.com/C0piIot/webgallery/issues/13) | [Streamed file hasher (sha256)](./issue-13-hash.md) |
 | [#14](https://github.com/C0piIot/webgallery/issues/14) | [Uploader: HEAD-then-PUT with multipart for >50 MB](./issue-14-upload.md) |
 | [#15](https://github.com/C0piIot/webgallery/issues/15) | [Sync controller + BroadcastChannel + connectivity](./issue-15-sync-controller.md) |
+| [#16](https://github.com/C0piIot/webgallery/issues/16) | [Retry/backoff + per-file error states](./issue-16-retry.md) |

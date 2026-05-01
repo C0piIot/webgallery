@@ -185,4 +185,105 @@ describe('lib/sync-worker.js → runSync', () => {
       { type: 'file-error', path: 'boom.jpg', error: 'upstream is sad' },
     ]);
   });
+
+  // --- #16 retry behavior ---
+
+  function bucketErr(status, msg = 'transient') {
+    const e = new Error(msg);
+    e.name = 'BucketError';
+    e.status = status;
+    return e;
+  }
+
+  test('transient upload error: retried, eventually succeeds, broadcasts file-retry', async () => {
+    const folder = { id: 1, label: 'photos', handle: { kind: 'directory' } };
+    const broadcast = vi.fn();
+    const dbStub = fakeDb();
+    const uploadFile = vi
+      .fn()
+      .mockRejectedValueOnce(bucketErr(503))
+      .mockRejectedValueOnce(bucketErr(503))
+      .mockResolvedValueOnce({ skipped: false, etag: 'e' });
+
+    await runSync({
+      loadConfig: async () => CONFIG,
+      listFolders: async () => [folder],
+      ensurePermissions: async () => true,
+      walkFolder: fakeWalker([entry('flaky.jpg')]),
+      hashFile: async () => 'h',
+      uploadFile,
+      createBucketClient: () => ({}),
+      db: dbStub,
+      broadcast,
+      retryOpts: { delayFn: () => Promise.resolve(), baseDelay: 1 },
+    });
+
+    expect(uploadFile).toHaveBeenCalledTimes(3);
+
+    const types = broadcast.mock.calls.map((c) => c[0].type);
+    expect(types.filter((t) => t === 'file-retry-scheduled')).toHaveLength(2);
+    expect(types.filter((t) => t === 'file-retry')).toHaveLength(2);
+    expect(types.filter((t) => t === 'file-uploaded')).toHaveLength(1);
+    expect(types.filter((t) => t === 'file-error')).toHaveLength(0);
+
+    const r = dbStub._all().find((x) => x.path === 'flaky.jpg');
+    expect(r.status).toBe('uploaded');
+  });
+
+  test('permanent upload error: single attempt, marked errored', async () => {
+    const folder = { id: 1, label: 'photos', handle: { kind: 'directory' } };
+    const broadcast = vi.fn();
+    const dbStub = fakeDb();
+    const uploadFile = vi.fn().mockRejectedValue(bucketErr(403, 'forbidden'));
+
+    await runSync({
+      loadConfig: async () => CONFIG,
+      listFolders: async () => [folder],
+      ensurePermissions: async () => true,
+      walkFolder: fakeWalker([entry('nope.jpg')]),
+      hashFile: async () => 'h',
+      uploadFile,
+      createBucketClient: () => ({}),
+      db: dbStub,
+      broadcast,
+      retryOpts: { delayFn: () => Promise.resolve() },
+    });
+
+    expect(uploadFile).toHaveBeenCalledTimes(1);
+    const r = dbStub._all().find((x) => x.path === 'nope.jpg');
+    expect(r.status).toBe('errored');
+    expect(r.error).toBe('forbidden');
+    expect(
+      broadcast.mock.calls.map((c) => c[0]).filter((m) => m.type === 'file-error'),
+    ).toHaveLength(1);
+  });
+
+  test('all-transient exhaustion: capped at maxAttempts, marked errored', async () => {
+    const folder = { id: 1, label: 'photos', handle: { kind: 'directory' } };
+    const broadcast = vi.fn();
+    const dbStub = fakeDb();
+    const uploadFile = vi.fn().mockRejectedValue(bucketErr(503, 'still flaky'));
+
+    await runSync({
+      loadConfig: async () => CONFIG,
+      listFolders: async () => [folder],
+      ensurePermissions: async () => true,
+      walkFolder: fakeWalker([entry('lostcause.jpg')]),
+      hashFile: async () => 'h',
+      uploadFile,
+      createBucketClient: () => ({}),
+      db: dbStub,
+      broadcast,
+      retryOpts: {
+        delayFn: () => Promise.resolve(),
+        baseDelay: 1,
+        maxAttempts: 3,
+      },
+    });
+
+    expect(uploadFile).toHaveBeenCalledTimes(3);
+    const r = dbStub._all().find((x) => x.path === 'lostcause.jpg');
+    expect(r.status).toBe('errored');
+    expect(r.error).toBe('still flaky');
+  });
 });
