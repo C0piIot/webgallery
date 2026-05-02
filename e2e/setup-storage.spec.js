@@ -54,3 +54,81 @@ test('save persists across reload', async ({ page }) => {
   await expect(page.getByLabel('Prefix')).toHaveValue(MINIO.prefix);
   await expect(page.getByLabel('Path-style URLs')).toBeChecked();
 });
+
+test('export downloads a JSON file with the current form values', async ({ page }) => {
+  await page.goto('/setup-storage.html');
+  await fill(page, MINIO);
+
+  // The Export button asks via confirm(); auto-accept.
+  page.once('dialog', (d) => d.accept());
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export config' }).click();
+  const download = await downloadPromise;
+
+  // Filename shape: webgallery-config-YYYY-MM-DD.json
+  expect(download.suggestedFilename()).toMatch(
+    /^webgallery-config-\d{4}-\d{2}-\d{2}\.json$/,
+  );
+
+  const path = await download.path();
+  const fs = await import('node:fs/promises');
+  const text = await fs.readFile(path, 'utf-8');
+  const doc = JSON.parse(text);
+
+  expect(doc.schemaVersion).toBe(1);
+  expect(doc.config.endpoint).toBe(MINIO.endpoint);
+  expect(doc.config.bucket).toBe(MINIO.bucket);
+  expect(doc.config.secretAccessKey).toBe(MINIO.secretAccessKey);
+  expect(doc.config.pathStyle).toBe(true);
+});
+
+test('import populates the form from a valid JSON file', async ({ page }) => {
+  await page.goto('/setup-storage.html');
+
+  const json = JSON.stringify({
+    schemaVersion: 1,
+    config: {
+      endpoint: MINIO.endpoint,
+      region: MINIO.region,
+      bucket: MINIO.bucket,
+      prefix: 'imported-prefix',
+      pathStyle: true,
+      accessKeyId: MINIO.accessKeyId,
+      secretAccessKey: MINIO.secretAccessKey,
+    },
+  });
+
+  await page.locator('#import-input').setInputFiles({
+    name: 'webgallery-config.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(json),
+  });
+
+  await expect(page.getByText(/Imported\. Click Test connection/i)).toBeVisible();
+  await expect(page.getByLabel('Endpoint')).toHaveValue(MINIO.endpoint);
+  await expect(page.getByLabel('Bucket')).toHaveValue(MINIO.bucket);
+  await expect(page.getByLabel('Prefix')).toHaveValue('imported-prefix');
+  await expect(page.getByLabel('Secret access key')).toHaveValue(
+    MINIO.secretAccessKey,
+  );
+  await expect(page.getByLabel('Path-style URLs')).toBeChecked();
+});
+
+test('import rejects an unknown schemaVersion without touching the form', async ({ page }) => {
+  await page.goto('/setup-storage.html');
+  // Pre-fill so we can verify nothing changed on the bad import.
+  await page.getByLabel('Endpoint').fill('https://stays-put.example.com');
+
+  const json = JSON.stringify({ schemaVersion: 999, config: {} });
+  await page.locator('#import-input').setInputFiles({
+    name: 'webgallery-config.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(json),
+  });
+
+  await expect(page.getByText(/Unsupported schemaVersion/i)).toBeVisible();
+  await expect(page.getByLabel('Endpoint')).toHaveValue(
+    'https://stays-put.example.com',
+  );
+});

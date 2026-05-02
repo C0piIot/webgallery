@@ -11,6 +11,9 @@ import {
   validateConfig,
   defaultPathStyle,
   ConfigError,
+  serializeConfigForExport,
+  parseImportedConfig,
+  ConfigImportError,
 } from './lib/config.js';
 import { createBucketClient, BucketError } from './lib/bucket.js';
 import { hashFile } from './lib/hash.js';
@@ -292,6 +295,47 @@ async function onSave(e) {
   }
 }
 
+function onExport() {
+  // Don't validate — let users export half-typed drafts. Save still
+  // gates real use. The whole point is to skip retyping the secret.
+  if (!confirm(
+    'The downloaded file will contain your bucket credentials in '
+    + 'plaintext. Continue?',
+  )) return;
+  const blob = new Blob(
+    [JSON.stringify(serializeConfigForExport(readForm()), null, 2)],
+    { type: 'application/json' },
+  );
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `webgallery-config-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function onImport(e) {
+  resultPane.clear();
+  const file = e.target.files?.[0];
+  // Reset so re-importing the same file fires another change event.
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const config = parseImportedConfig(text);
+    applyConfigToForm(config);
+    providerEl.value = guessProvider(config.endpoint);
+    clearErrors();
+    resultPane.info('Imported. Click Test connection to verify, then Save.');
+  } catch (err) {
+    if (err instanceof ConfigImportError) resultPane.error(err.message);
+    else resultPane.error(`Import failed: ${err?.message ?? err}`);
+  }
+}
+
 (async function bootstrap() {
   const existing = await loadConfig();
   if (existing) {
@@ -303,4 +347,7 @@ async function onSave(e) {
   providerEl.addEventListener('change', () => applyPreset(providerEl.value));
   testBtn.addEventListener('click', onTest);
   form.addEventListener('submit', onSave);
+  $('export-btn').addEventListener('click', onExport);
+  $('import-btn').addEventListener('click', () => $('import-input').click());
+  $('import-input').addEventListener('change', onImport);
 })();

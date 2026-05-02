@@ -131,4 +131,74 @@ describe('lib/config.js', () => {
     await saveConfig({ ...validConfig(), pathStyle: true });
     expect((await loadConfig()).pathStyle).toBe(true);
   });
+
+  test('serializeConfigForExport stamps schemaVersion + whitelists fields', async () => {
+    const {
+      serializeConfigForExport,
+      CONFIG_SCHEMA_VERSION,
+    } = await import('../../lib/config.js');
+    const c = { ...validConfig(), pathStyle: true };
+    // Add a junk field that should NOT round-trip into the export.
+    const out = serializeConfigForExport({ ...c, sneakyExtra: 'leak' });
+    expect(out.schemaVersion).toBe(CONFIG_SCHEMA_VERSION);
+    expect(out.config).toEqual(c);
+    expect(out.config.sneakyExtra).toBeUndefined();
+  });
+
+  test('serializeConfigForExport defaults missing fields to empty/false', async () => {
+    const { serializeConfigForExport } = await import('../../lib/config.js');
+    const out = serializeConfigForExport({});
+    expect(out.config).toEqual({
+      endpoint: '',
+      region: '',
+      bucket: '',
+      prefix: '',
+      pathStyle: false,
+      accessKeyId: '',
+      secretAccessKey: '',
+    });
+  });
+
+  test('parseImportedConfig round-trips exported JSON', async () => {
+    const {
+      serializeConfigForExport,
+      parseImportedConfig,
+    } = await import('../../lib/config.js');
+    const c = { ...validConfig(), pathStyle: true };
+    const text = JSON.stringify(serializeConfigForExport(c));
+    expect(parseImportedConfig(text)).toEqual(c);
+  });
+
+  test('parseImportedConfig rejects invalid JSON', async () => {
+    const { parseImportedConfig, ConfigImportError } = await import(
+      '../../lib/config.js'
+    );
+    expect(() => parseImportedConfig('not json')).toThrow(ConfigImportError);
+  });
+
+  test('parseImportedConfig rejects mismatched schemaVersion', async () => {
+    const { parseImportedConfig, ConfigImportError } = await import(
+      '../../lib/config.js'
+    );
+    const text = JSON.stringify({ schemaVersion: 999, config: validConfig() });
+    expect(() => parseImportedConfig(text)).toThrow(ConfigImportError);
+  });
+
+  test('parseImportedConfig rejects missing config object', async () => {
+    const { parseImportedConfig, ConfigImportError } = await import(
+      '../../lib/config.js'
+    );
+    expect(() => parseImportedConfig(JSON.stringify({ schemaVersion: 1 })))
+      .toThrow(ConfigImportError);
+    expect(() => parseImportedConfig(
+      JSON.stringify({ schemaVersion: 1, config: 'wrong type' }),
+    )).toThrow(ConfigImportError);
+  });
+
+  test('parseImportedConfig rejects bare null/array top-level docs', async () => {
+    const { parseImportedConfig, ConfigImportError } = await import(
+      '../../lib/config.js'
+    );
+    expect(() => parseImportedConfig('null')).toThrow(ConfigImportError);
+  });
 });

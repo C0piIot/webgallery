@@ -98,6 +98,19 @@
         <button id="save-btn" type="submit" class="btn btn-primary">Save</button>
       </div>
     </form>
+
+    <hr class="my-4">
+    <h2 class="h6">Export / import</h2>
+    <div class="alert alert-warning small" role="note">
+      Exported files contain your bucket credentials in plaintext. Treat
+      one like a password — store it in a password manager or encrypted
+      volume, and don't commit it to a repo or paste it on Slack/email.
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button id="export-btn" type="button" class="btn btn-outline-secondary">Export config</button>
+      <button id="import-btn" type="button" class="btn btn-outline-secondary">Import config</button>
+      <input id="import-input" type="file" accept="application/json,.json" class="d-none">
+    </div>
   </main>
 
   <script type="module" src="./setup-storage.js"></script>
