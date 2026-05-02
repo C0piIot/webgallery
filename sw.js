@@ -5,7 +5,7 @@
 // pick up new files on the load after the SW activates. Per architecture:
 // docs/architecture.md → Static bundle → Cache busting.
 
-const VERSION = 'v19';
+const VERSION = 'v20';
 const CACHE = `webgallery-shell-${VERSION}`;
 
 const SHELL = [
@@ -45,6 +45,15 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(SHELL)),
   );
+});
+
+// The page posts SKIP_WAITING from the "new version available" banner's
+// Reload button. Without this, location.reload() keeps the old SW in
+// control and the user gets stuck on a stale shell. See #23.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (event) => {
