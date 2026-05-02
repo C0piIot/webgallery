@@ -38,3 +38,4 @@ the same change that closes the issue.
 | [#24](https://github.com/C0piIot/webgallery/issues/24) | [Local-tab media previews (parity with Remote)](./issue-24-local-previews.md) |
 | [#28](https://github.com/C0piIot/webgallery/issues/28) | [Local thumbnails from disk](./issue-28-local-disk-thumbs.md) |
 | [#29](https://github.com/C0piIot/webgallery/issues/29) | [Local thumb badge fills the ratio container](./issue-29-thumb-overlap.md) |
+| [#26](https://github.com/C0piIot/webgallery/issues/26) | [Export / import bucket configuration as JSON](./issue-26-config-export-import.md) |
