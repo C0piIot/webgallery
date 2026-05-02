@@ -56,3 +56,28 @@ test('Local/Remote tabs switch and update URL', async ({ page }) => {
   await expect(page.getByRole('tab', { name: 'Remote' })).toHaveClass(/active/);
   await expect(page).toHaveURL(/[?&]tab=remote/);
 });
+
+test('help page loads with content sections', async ({ page }) => {
+  await page.goto('/help.html');
+  await expect(
+    page.getByRole('heading', { name: /what this is/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: /security model/i }),
+  ).toBeVisible();
+});
+
+test('Storage page links to Help (always-visible link)', async ({ page }) => {
+  await page.goto('/setup-storage.html');
+  await page.getByRole('link', { name: /Read the Help page/i }).first().click();
+  await expect(page).toHaveURL(/help\.html$/);
+});
+
+test('Storage welcome alert links to Help', async ({ page }) => {
+  await page.goto('/setup-storage.html?welcome=1');
+  await page
+    .locator('#welcome-alert')
+    .getByRole('link', { name: /Read the Help page/i })
+    .click();
+  await expect(page).toHaveURL(/help\.html$/);
+});

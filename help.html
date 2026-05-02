@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; connect-src 'self' https: http:; manifest-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>webgallery — Help</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#212529">
+  <link rel="stylesheet" href="./vendor/bootstrap.min.css">
+</head>
+<body>
+  <nav class="navbar navbar-expand navbar-dark bg-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="./index.html">webgallery</a>
+      <ul class="navbar-nav">
+        <li class="nav-item"><a class="nav-link" href="./index.html">Gallery</a></li>
+        <li class="nav-item"><a class="nav-link" href="./setup-storage.html">Storage</a></li>
+        <li class="nav-item"><a class="nav-link" href="./setup-folders.html">Folders</a></li>
+      </ul>
+      <button id="install-btn" type="button"
+              class="btn btn-sm btn-outline-light ms-auto d-none">Install</button>
+    </div>
+  </nav>
+
+  <main class="container py-3" style="max-width: 48rem;">
+    <h1 class="h3 mb-4">Help</h1>
+
+    <section>
+      <h2 class="h5 mt-4">What this is</h2>
+      <p>
+        webgallery is a Progressive Web App that doubles as a personal
+        photo and video gallery and a backup tool. It runs entirely in
+        your browser with no server of its own — it talks directly to
+        an S3-compatible bucket you provide. Targeted at Chrome on
+        Android and desktop.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="h5 mt-4">How storage works</h2>
+      <p>
+        An <strong>S3 bucket</strong> is a remote folder served by a
+        provider over an HTTPS API. You authenticate with an
+        access-key + secret pair. The provider bills you for bytes
+        stored and bytes transferred.
+      </p>
+      <p>
+        <strong>S3-compatible</strong> means a provider implements the
+        same API; any of them works with this app. Pick one that fits
+        your budget and trust requirements.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="h5 mt-4">Picking a provider</h2>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th scope="col">Provider</th>
+              <th scope="col">Storage</th>
+              <th scope="col">Egress</th>
+              <th scope="col">Good for</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">AWS S3</th>
+              <td>$$$</td>
+              <td>$$$</td>
+              <td>The original; ubiquitous, deep ecosystem.</td>
+            </tr>
+            <tr>
+              <th scope="row">Cloudflare R2</th>
+              <td>$$</td>
+              <td>Free</td>
+              <td>Cheapest TCO if you read your photos often.</td>
+            </tr>
+            <tr>
+              <th scope="row">Backblaze B2</th>
+              <td>$</td>
+              <td>$</td>
+              <td>Cheapest at-rest storage.</td>
+            </tr>
+            <tr>
+              <th scope="row">MinIO (self-hosted)</th>
+              <td colspan="2">your hardware</td>
+              <td>Full control; for advanced users.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-muted small">
+        Pricing is approximate; check each provider's pricing page for
+        current rates.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="h5 mt-4">Security model</h2>
+      <p>
+        This app is fully client-side. The HTML and JS come from a
+        public GitHub Pages site under the maintainer's account. If
+        the maintainer pushes malicious JS — or if their account is
+        hacked — the new code runs in your browser on the next load
+        and can read your bucket credentials out of IndexedDB.
+      </p>
+      <p>
+        Content Security Policy partially mitigates this (the app
+        loads no third-party origins, all dependencies are vendored)
+        but does <em>not</em> prevent first-party JS from
+        misbehaving. You're trusting whoever controls the Pages
+        source.
+      </p>
+
+      <h3 class="h6 mt-4">Mitigations, strongest first</h3>
+      <ol>
+        <li>
+          <strong>Fork and self-host.</strong> Fork the repo, enable
+          Pages on the fork, point your devices at your fork's URL.
+          Review upstream commits before merging. You're now trusting
+          yourself plus GitHub's infrastructure.
+        </li>
+        <li>
+          <strong>Least-privilege credentials.</strong> Create a key
+          scoped to one bucket and one prefix, granting only the S3
+          actions this app actually uses (see the example policy
+          below). Rotate the key if anything ever feels wrong.
+        </li>
+        <li>
+          <strong>Bucket versioning + tight CORS.</strong> The app
+          hard-deletes — versioning is your only undo. Restrict CORS
+          to the origin you serve the app from.
+        </li>
+      </ol>
+
+      <h3 class="h6 mt-4">Example IAM policy (AWS-flavored)</h3>
+      <p class="small text-muted">
+        Replace <code>your-bucket</code> and <code>your-prefix</code>.
+        Other providers use similar JSON shapes.
+      </p>
+<pre class="bg-light p-3 small"><code>{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:AbortMultipartUpload"
+      ],
+      "Resource": "arn:aws:s3:::your-bucket/your-prefix/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::your-bucket",
+      "Condition": {
+        "StringLike": { "s3:prefix": ["your-prefix/*"] }
+      }
+    }
+  ]
+}</code></pre>
+
+      <h3 class="h6 mt-4">Example CORS configuration</h3>
+      <p class="small text-muted">
+        Replace the origin with where you serve the app from
+        (your GitHub Pages URL or your fork's URL).
+      </p>
+<pre class="bg-light p-3 small"><code>[
+  {
+    "AllowedOrigins": ["https://your-username.github.io"],
+    "AllowedMethods": ["GET", "PUT", "HEAD", "DELETE", "POST"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3000
+  }
+]</code></pre>
+
+      <h3 class="h6 mt-4">Standing recommendations</h3>
+      <ul>
+        <li>Use HTTPS-only endpoints in production.</li>
+        <li>Don't reuse the bucket for other apps — a leaked key escalates sideways.</li>
+        <li>Watch your provider's billing dashboard for traffic anomalies.</li>
+      </ul>
+    </section>
+  </main>
+
+  <script type="module" src="./help.js"></script>
+</body>
+</html>
