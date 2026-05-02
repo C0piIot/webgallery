@@ -36,3 +36,4 @@ the same change that closes the issue.
 | [#22](https://github.com/C0piIot/webgallery/issues/22) | [Empty / error / loading states sweep](./issue-22-states.md) |
 | [#23](https://github.com/C0piIot/webgallery/issues/23) | [SW update banner: SKIP_WAITING handshake](./issue-23-sw-update.md) |
 | [#24](https://github.com/C0piIot/webgallery/issues/24) | [Local-tab media previews (parity with Remote)](./issue-24-local-previews.md) |
+| [#28](https://github.com/C0piIot/webgallery/issues/28) | [Local thumbnails from disk](./issue-28-local-disk-thumbs.md) |

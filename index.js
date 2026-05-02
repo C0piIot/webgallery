@@ -10,14 +10,15 @@ import { createSyncController } from './lib/sync.js';
 import { createBucketClient } from './lib/bucket.js';
 import { reconcile } from './lib/remote-list.js';
 import { keyFor } from './lib/upload.js';
+import { listFolders } from './lib/folders.js';
 import { isOnline, onChange as onConnectivityChange } from './lib/connectivity.js';
 import * as db from './lib/db.js';
 
 const VIDEO_RE = /\.(mp4|mov|webm|m4v|avi)$/i;
 
 // Shared bucket client. Both tabs need one — Remote for ListObjectsV2 +
-// thumbnails, Local for thumbnails of already-uploaded items. Built
-// lazily on first use so the welcome redirect doesn't race against it.
+// thumbnails (and as a Local-thumb fallback). Built lazily on first
+// use so the welcome redirect doesn't race against it.
 let bucketClient = null;
 let bucketPrefix = null;
 async function ensureBucketClient() {
@@ -28,6 +29,57 @@ async function ensureBucketClient() {
   bucketPrefix = config.prefix;
   return bucketClient;
 }
+
+// --- Local-disk preview resolution ---
+//
+// Local-tab thumbnails resolve to files on disk via the user's already-
+// permissioned FileSystemDirectoryHandle. Avoids egress fees and works
+// offline. Falls back to the bucket only when permission isn't granted
+// at this moment (e.g. fresh tab open).
+
+let folderCache = null;
+async function getFolders() {
+  if (folderCache) return folderCache;
+  folderCache = await listFolders();
+  return folderCache;
+}
+
+async function tryLocalObjectUrl(record) {
+  if (!record?.path) return null;
+  const folders = await getFolders();
+  const folder = record.folderId != null
+    ? folders.find((f) => f.id === record.folderId)
+    : folders.find((f) => f.label === record.folderLabel);
+  if (!folder?.handle) return null;
+  // OPFS handles (used in e2e) don't expose queryPermission and are
+  // always permitted; treat that case as granted.
+  if (typeof folder.handle.queryPermission === 'function') {
+    const state = await folder.handle.queryPermission({ mode: 'read' });
+    if (state !== 'granted') return null;
+  }
+  let dir = folder.handle;
+  const parts = record.path.split('/');
+  const filename = parts.pop();
+  try {
+    for (const p of parts) dir = await dir.getDirectoryHandle(p);
+    const fh = await dir.getFileHandle(filename);
+    const file = await fh.getFile();
+    return URL.createObjectURL(file);
+  } catch {
+    return null;
+  }
+}
+
+const objectUrls = new Map();
+function trackObjectUrl(path, url) {
+  const old = objectUrls.get(path);
+  if (old && old !== url) URL.revokeObjectURL(old);
+  objectUrls.set(path, url);
+}
+window.addEventListener('pagehide', () => {
+  for (const url of objectUrls.values()) URL.revokeObjectURL(url);
+  objectUrls.clear();
+});
 
 const TABS = ['local', 'remote'];
 
@@ -100,7 +152,7 @@ function setupDetailDialog() {
 
 async function openDetail({
   key, filename, size, capturedAt, sourcePath,
-  deletable, onDelete, refine,
+  deletable, onDelete, refine, localResolve,
 }) {
   currentDetailKey = key;
 
@@ -125,7 +177,7 @@ async function openDetail({
     }
   }
 
-  await renderDetailMedia(key, filename);
+  await renderDetailMedia(key, filename, localResolve);
   document.getElementById('detail-dialog').showModal();
 
   if (refine && isOnline()) {
@@ -148,23 +200,34 @@ async function openDetail({
   }
 }
 
-async function renderDetailMedia(key, filename) {
+async function renderDetailMedia(key, filename, localResolve) {
   const container = document.getElementById('detail-media');
   container.replaceChildren();
   const isVideo = VIDEO_RE.test(filename);
 
-  const client = await ensureBucketClient();
-  if (!isOnline() || !client) {
-    container.appendChild(detailPlaceholder('Offline — connect to load preview'));
-    return;
+  // Prefer the local file if the caller can resolve it. Works offline,
+  // no egress fees, no signing.
+  let src = null;
+  if (localResolve) {
+    try {
+      src = await localResolve();
+    } catch {
+      src = null;
+    }
   }
 
-  let src;
-  try {
-    src = await client.presignGet(key);
-  } catch {
-    container.appendChild(detailPlaceholder('Could not sign URL'));
-    return;
+  if (!src) {
+    const client = await ensureBucketClient();
+    if (!isOnline() || !client) {
+      container.appendChild(detailPlaceholder('Offline — connect to load preview'));
+      return;
+    }
+    try {
+      src = await client.presignGet(key);
+    } catch {
+      container.appendChild(detailPlaceholder('Could not sign URL'));
+      return;
+    }
   }
 
   if (isVideo) {
@@ -268,6 +331,7 @@ async function bootstrapLocalTab() {
         capturedAt: record.mtime,
         sourcePath: record.path,
         deletable: false,
+        localResolve: () => tryLocalObjectUrl(record),
       });
     });
   }
@@ -427,30 +491,56 @@ function renderLocalThumb(thumbEl, record, client) {
   const filename = record.path?.split('/').pop() ?? record.path ?? '';
   const isVideo = VIDEO_RE.test(filename);
 
-  if (isVideo) {
-    thumbEl.appendChild(thumbPlaceholder('🎬'));
-  } else if (
-    record.status === 'uploaded' && client && record.hash && bucketPrefix
-  ) {
-    const img = document.createElement('img');
-    img.loading = 'lazy';
-    img.alt = filename;
-    img.style.objectFit = 'cover';
-    img.style.width = '100%';
-    img.style.height = '100%';
-    const key = keyFor(bucketPrefix, record.hash, filename);
-    client.presignGet(key)
-      .then((src) => { img.src = src; })
-      .catch((err) => console.warn('local preview presign failed:', key, err));
-    thumbEl.appendChild(img);
-  } else {
-    thumbEl.appendChild(thumbPlaceholder(statusEmoji(record.status)));
-  }
-
+  // Always paint the badge — it stays in sync with status regardless
+  // of whether the thumb resolves.
   const badge = document.createElement('span');
   badge.className = 'badge position-absolute top-0 end-0 m-1';
   badge.dataset.role = 'status';
   setBadge(badge, record.status, record.error);
+
+  if (isVideo) {
+    thumbEl.appendChild(thumbPlaceholder('🎬'));
+    thumbEl.appendChild(badge);
+    return;
+  }
+
+  // Optimistic <img>: resolve disk URL first, fall back to bucket
+  // presign for uploaded items, and replace with a status placeholder
+  // if both fail.
+  const img = document.createElement('img');
+  img.loading = 'lazy';
+  img.alt = filename;
+  img.style.objectFit = 'cover';
+  img.style.width = '100%';
+  img.style.height = '100%';
+  thumbEl.appendChild(img);
+  thumbEl.appendChild(badge);
+
+  tryLocalObjectUrl(record)
+    .then((url) => {
+      if (url) {
+        trackObjectUrl(record.path, url);
+        img.src = url;
+        return;
+      }
+      if (
+        record.status === 'uploaded' && client && record.hash && bucketPrefix
+      ) {
+        const key = keyFor(bucketPrefix, record.hash, filename);
+        return client.presignGet(key)
+          .then((src) => { img.src = src; })
+          .catch((err) => {
+            console.warn('local preview presign failed:', key, err);
+            replaceWithPlaceholder(thumbEl, badge, record.status);
+          });
+      }
+      replaceWithPlaceholder(thumbEl, badge, record.status);
+    });
+}
+
+function replaceWithPlaceholder(thumbEl, badge, status) {
+  thumbEl.replaceChildren();
+  thumbEl.appendChild(thumbPlaceholder(statusEmoji(status)));
   thumbEl.appendChild(badge);
 }
 

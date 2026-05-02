@@ -41,6 +41,14 @@ test('Local tab renders a card per file with the right badges after a sync', asy
   const uploaded = events.filter((e) => e.type === 'file-uploaded');
   expect(uploaded).toHaveLength(2);
 
+  // Track all S3-bound requests during the Local-tab-only render. None
+  // are expected — the disk path should serve every thumbnail.
+  const s3Requests = [];
+  page.on('request', (req) => {
+    const url = req.url();
+    if (/(amazonaws|x-amz-signature)/i.test(url)) s3Requests.push(url);
+  });
+
   // Switch to index.html → Local tab and verify two cards with Uploaded
   // badges. IndexedDB persists across navigations.
   await page.goto('/index.html?e2e=1&tab=local');
@@ -52,14 +60,10 @@ test('Local tab renders a card per file with the right badges after a sync', asy
     await expect(card.locator('[data-role="status"]')).toContainText(
       /Uploaded/i,
     );
-    // Uploaded card has a thumb container with a presigned <img src>.
-    // We can't render a .txt as an image, but the wiring sets src to a
-    // signed URL — assert the URL shape.
+    // OPFS folders count as permission-granted; thumbnails should be
+    // Object URLs (blob:), not S3 presigned URLs.
     const img = card.locator('[data-role="thumb"] img');
-    await expect(img).toHaveAttribute(
-      'src',
-      /X-Amz-Signature=|x-amz-signature=/i,
-    );
+    await expect(img).toHaveAttribute('src', /^blob:/);
   }
 
   // Click an uploaded card → shared detail dialog opens read-only.
@@ -70,8 +74,17 @@ test('Local tab renders a card per file with the right badges after a sync', asy
   // Local opens read-only — the delete button must be hidden, not just
   // disabled.
   await expect(page.locator('#detail-delete')).toBeHidden();
+  // Detail media should also be local — the dialog's <img> uses a
+  // blob: URL when localResolve succeeds.
+  await expect(page.locator('#detail-media img')).toHaveAttribute(
+    'src',
+    /^blob:/,
+  );
   await page.locator('#detail-close').click();
   await expect(dialog).not.toHaveAttribute('open', '');
+
+  // No S3 requests should have been made during the Local-tab flow.
+  expect(s3Requests).toEqual([]);
 
   // Cleanup: delete uploaded objects.
   for (const u of uploaded) {
