@@ -3,7 +3,7 @@
 // the walker emits).
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { uploadFile, keyFor } from '../../lib/upload.js';
+import { uploadFile, keyFor, contentDispositionFor } from '../../lib/upload.js';
 
 function fakeClient(overrides = {}) {
   return {
@@ -167,5 +167,39 @@ describe('lib/upload.js', () => {
     });
     expect(onProgress).toHaveBeenCalledTimes(1);
     expect(onProgress).toHaveBeenCalledWith(5, 5);
+  });
+
+  test('contentDispositionFor: ASCII filename uses simple quoted form', () => {
+    expect(contentDispositionFor({ name: 'IMG_1234.jpg' }))
+      .toBe('attachment; filename="IMG_1234.jpg"');
+  });
+
+  test('contentDispositionFor: non-ASCII filename uses RFC 5987 filename*', () => {
+    const got = contentDispositionFor({ name: '名前.jpg' });
+    expect(got).toMatch(/filename="[^"]*\.jpg"/);
+    expect(got).toContain(`filename*=UTF-8''${encodeURIComponent('名前.jpg')}`);
+  });
+
+  test('contentDispositionFor: quotes/backslashes/CRLF replaced with underscores', () => {
+    expect(contentDispositionFor({ name: 'we"ird\\name.jpg' }))
+      .toBe('attachment; filename="we_ird_name.jpg"');
+  });
+
+  test('single PUT carries Content-Disposition with the original filename', async () => {
+    const client = fakeClient();
+    await uploadFile(client, entryFor('hello'), { prefix: PREFIX });
+    expect(client.put.mock.calls[0][2].contentDisposition)
+      .toBe('attachment; filename="IMG_0001.jpg"');
+  });
+
+  test('multipart createMultipartUpload carries Content-Disposition', async () => {
+    const client = fakeClient();
+    // 4KB blob > 1KB threshold → multipart path.
+    const big = entryFor('x'.repeat(4096), { name: 'big.bin' });
+    await uploadFile(client, big, {
+      prefix: PREFIX, threshold: 1024, partSize: 1024,
+    });
+    expect(client.createMultipartUpload.mock.calls[0][1].contentDisposition)
+      .toBe('attachment; filename="big.bin"');
   });
 });

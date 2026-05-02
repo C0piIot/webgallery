@@ -41,6 +41,7 @@ test('single PUT round-trip: object lands with correct metadata', async ({
   );
   expect(meta.size).toBe('hello world (single put)'.length);
   expect(meta.contentType).toBe('text/plain');
+  expect(meta.contentDisposition).toBe('attachment; filename="small.txt"');
   expect(meta.metadata.filename).toBe('small.txt');
   expect(meta.metadata['source-path']).toBe('e2e/small.txt');
 
@@ -83,6 +84,7 @@ test('multipart round-trip (11 MiB blob, 5 MiB parts → 3 parts)', async ({
   );
   expect(meta.size).toBe(11 * 1024 * 1024);
   expect(meta.metadata.filename).toBe('big.bin');
+  expect(meta.contentDisposition).toBe('attachment; filename="big.bin"');
 
   await page.evaluate(
     async ({ key, config }) => window.__test_delete__({ key, config }),
