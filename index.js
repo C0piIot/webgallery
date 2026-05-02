@@ -456,7 +456,7 @@ function renderCard(record, client) {
   card.className = 'card h-100';
 
   const thumb = document.createElement('div');
-  thumb.className = 'ratio ratio-1x1 bg-light position-relative';
+  thumb.className = 'ratio ratio-1x1 bg-light';
   thumb.dataset.role = 'thumb';
   renderLocalThumb(thumb, record, client);
   card.appendChild(thumb);
@@ -491,6 +491,13 @@ function renderLocalThumb(thumbEl, record, client) {
   const filename = record.path?.split('/').pop() ?? record.path ?? '';
   const isVideo = VIDEO_RE.test(filename);
 
+  // .ratio > * forces position:absolute + 100%/100% on every direct
+  // child, which would stretch the badge across the whole thumb. Wrap
+  // the image + badge in a single inner layer so they're descendants
+  // of that absolute container, free to size and position normally.
+  const layer = document.createElement('div');
+  thumbEl.appendChild(layer);
+
   // Always paint the badge — it stays in sync with status regardless
   // of whether the thumb resolves.
   const badge = document.createElement('span');
@@ -499,8 +506,8 @@ function renderLocalThumb(thumbEl, record, client) {
   setBadge(badge, record.status, record.error);
 
   if (isVideo) {
-    thumbEl.appendChild(thumbPlaceholder('🎬'));
-    thumbEl.appendChild(badge);
+    layer.appendChild(thumbPlaceholder('🎬'));
+    layer.appendChild(badge);
     return;
   }
 
@@ -513,8 +520,8 @@ function renderLocalThumb(thumbEl, record, client) {
   img.style.objectFit = 'cover';
   img.style.width = '100%';
   img.style.height = '100%';
-  thumbEl.appendChild(img);
-  thumbEl.appendChild(badge);
+  layer.appendChild(img);
+  layer.appendChild(badge);
 
   tryLocalObjectUrl(record)
     .then((url) => {
@@ -531,22 +538,22 @@ function renderLocalThumb(thumbEl, record, client) {
           .then((src) => { img.src = src; })
           .catch((err) => {
             console.warn('local preview presign failed:', key, err);
-            replaceWithPlaceholder(thumbEl, badge, record.status);
+            replaceWithPlaceholder(layer, badge, record.status);
           });
       }
-      replaceWithPlaceholder(thumbEl, badge, record.status);
+      replaceWithPlaceholder(layer, badge, record.status);
     });
 }
 
-function replaceWithPlaceholder(thumbEl, badge, status) {
-  thumbEl.replaceChildren();
-  thumbEl.appendChild(thumbPlaceholder(statusEmoji(status)));
-  thumbEl.appendChild(badge);
+function replaceWithPlaceholder(layer, badge, status) {
+  layer.replaceChildren();
+  layer.appendChild(thumbPlaceholder(statusEmoji(status)));
+  layer.appendChild(badge);
 }
 
 function thumbPlaceholder(emoji) {
   const div = document.createElement('div');
-  div.className = 'd-flex align-items-center justify-content-center fs-1';
+  div.className = 'd-flex align-items-center justify-content-center fs-1 h-100 w-100';
   div.textContent = emoji;
   return div;
 }

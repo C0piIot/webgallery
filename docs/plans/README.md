@@ -37,3 +37,4 @@ the same change that closes the issue.
 | [#23](https://github.com/C0piIot/webgallery/issues/23) | [SW update banner: SKIP_WAITING handshake](./issue-23-sw-update.md) |
 | [#24](https://github.com/C0piIot/webgallery/issues/24) | [Local-tab media previews (parity with Remote)](./issue-24-local-previews.md) |
 | [#28](https://github.com/C0piIot/webgallery/issues/28) | [Local thumbnails from disk](./issue-28-local-disk-thumbs.md) |
+| [#29](https://github.com/C0piIot/webgallery/issues/29) | [Local thumb badge fills the ratio container](./issue-29-thumb-overlap.md) |
