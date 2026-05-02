@@ -42,3 +42,4 @@ the same change that closes the issue.
 | [#27](https://github.com/C0piIot/webgallery/issues/27) | [In-app Help / About page](./issue-27-help-page.md) |
 | [#30](https://github.com/C0piIot/webgallery/issues/30) | [Content-Disposition on upload](./issue-30-content-disposition.md) |
 | [#31](https://github.com/C0piIot/webgallery/issues/31) | [Delete confirm should show the friendly filename](./issue-31-delete-confirm-filename.md) |
+| [#32](https://github.com/C0piIot/webgallery/issues/32) | [Fix isFsaAvailable ReferenceError on setup-folders](./issue-32-fsa-alias-bug.md) |

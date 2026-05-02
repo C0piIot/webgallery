@@ -89,7 +89,7 @@ async function makeRow(folder) {
 
   const right = document.createElement('div');
   right.className = 'btn-group btn-group-sm';
-  if (state !== 'granted' && isFsaAvailable()) {
+  if (state !== 'granted' && hasFsa()) {
     const regrant = document.createElement('button');
     regrant.type = 'button';
     regrant.className = 'btn btn-outline-secondary';
