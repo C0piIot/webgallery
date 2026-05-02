@@ -41,3 +41,4 @@ the same change that closes the issue.
 | [#26](https://github.com/C0piIot/webgallery/issues/26) | [Export / import bucket configuration as JSON](./issue-26-config-export-import.md) |
 | [#27](https://github.com/C0piIot/webgallery/issues/27) | [In-app Help / About page](./issue-27-help-page.md) |
 | [#30](https://github.com/C0piIot/webgallery/issues/30) | [Content-Disposition on upload](./issue-30-content-disposition.md) |
+| [#31](https://github.com/C0piIot/webgallery/issues/31) | [Delete confirm should show the friendly filename](./issue-31-delete-confirm-filename.md) |

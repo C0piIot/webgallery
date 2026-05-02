@@ -5,7 +5,7 @@
 // pick up new files on the load after the SW activates. Per architecture:
 // docs/architecture.md → Static bundle → Cache busting.
 
-const VERSION = 'v26';
+const VERSION = 'v27';
 const CACHE = `webgallery-shell-${VERSION}`;
 
 const SHELL = [

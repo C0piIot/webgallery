@@ -173,7 +173,15 @@ async function openDetail({
   if (deletable) {
     deleteBtn.disabled = !isOnline();
     if (onDelete) {
-      deleteBtn.addEventListener('click', () => onDelete(key, filename));
+      deleteBtn.addEventListener('click', () => {
+        // Read the live heading so we use whatever name the user is
+        // actually looking at — refineFromHead populates the friendly
+        // filename from x-amz-meta-* asynchronously, after the dialog
+        // first opens with the hash-keyed fallback.
+        const displayName = document.getElementById('detail-filename').textContent
+          || filename;
+        onDelete(key, displayName);
+      });
     }
   }
 

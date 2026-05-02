@@ -71,3 +71,54 @@ test('Remote tab renders cards, transitions to offline, refreshes on reconnect',
     );
   }
 });
+
+test('delete confirm shows the friendly filename, not the hash', async ({
+  page,
+}) => {
+  await page.goto('/setup-storage.html?e2e=1');
+  await page.evaluate(async (config) => {
+    await window.__test_save_config__(config);
+  }, MINIO);
+
+  const out = await page.evaluate(
+    async (args) => window.__test_upload__(args),
+    {
+      name: 'human-name.txt',
+      content: 'hello',
+      config: MINIO,
+      opts: { contentType: 'text/plain', prefix: MINIO.prefix },
+    },
+  );
+
+  await page.goto('/index.html?tab=remote');
+  await expect(page.locator('#remote-grid .col')).toHaveCount(1, {
+    timeout: 15_000,
+  });
+
+  // Open the card. The dialog opens with the hash-keyed filename
+  // initially, then refines to the friendly name from HEAD metadata.
+  await page.locator('#remote-grid .col').click();
+  await expect(page.locator('#detail-dialog[open]')).toBeVisible();
+  await expect(page.locator('#detail-filename')).toHaveText('human-name.txt');
+
+  // Listen for the confirm() dialog and dismiss so the object stays
+  // for cleanup. We capture its message before dismissing.
+  let dialogMessage = null;
+  page.once('dialog', async (dialog) => {
+    dialogMessage = dialog.message();
+    await dialog.dismiss();
+  });
+
+  await page.locator('#detail-delete').click();
+  // Loop until the dialog has been observed (Playwright fires it
+  // synchronously, but allow one tick).
+  await expect.poll(() => dialogMessage).toContain('human-name.txt');
+  expect(dialogMessage).not.toMatch(/[a-f0-9]{40,}/);
+
+  // Cleanup.
+  await page.goto('/setup-storage.html?e2e=1');
+  await page.evaluate(
+    async (a) => window.__test_delete__(a),
+    { key: out.key, config: MINIO },
+  );
+});
