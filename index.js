@@ -9,8 +9,25 @@ import { loadConfig, hasConfig } from './lib/config.js';
 import { createSyncController } from './lib/sync.js';
 import { createBucketClient } from './lib/bucket.js';
 import { reconcile } from './lib/remote-list.js';
+import { keyFor } from './lib/upload.js';
 import { isOnline, onChange as onConnectivityChange } from './lib/connectivity.js';
 import * as db from './lib/db.js';
+
+const VIDEO_RE = /\.(mp4|mov|webm|m4v|avi)$/i;
+
+// Shared bucket client. Both tabs need one — Remote for ListObjectsV2 +
+// thumbnails, Local for thumbnails of already-uploaded items. Built
+// lazily on first use so the welcome redirect doesn't race against it.
+let bucketClient = null;
+let bucketPrefix = null;
+async function ensureBucketClient() {
+  if (bucketClient) return bucketClient;
+  const config = await loadConfig();
+  if (!config) return null;
+  bucketClient = createBucketClient(config);
+  bucketPrefix = config.prefix;
+  return bucketClient;
+}
 
 const TABS = ['local', 'remote'];
 
@@ -40,6 +57,7 @@ showTab(new URL(location.href).searchParams.get('tab') || 'local');
     location.replace('./setup-storage.html?welcome=1');
     return;
   }
+  setupDetailDialog();
   // FSA-missing path: replace the Local pane content with the standard
   // explainer. Remote tab keeps working regardless.
   if (!hasFsa()) {
@@ -49,6 +67,130 @@ showTab(new URL(location.href).searchParams.get('tab') || 'local');
   }
   bootstrapRemoteTab();
 })();
+
+// --- Shared detail dialog ---
+//
+// The <dialog> element + its skeleton fields live in index.html. Both
+// tabs build an opts bag and call openDetail; the dialog is shared so
+// behavior stays consistent. Local opens it read-only (no delete);
+// Remote provides a delete handler + an optional refine() that HEADs
+// the bucket for richer metadata.
+
+let currentDetailKey = null;
+
+function setupDetailDialog() {
+  const dialog = document.getElementById('detail-dialog');
+  document.getElementById('detail-close')
+    .addEventListener('click', () => dialog.close());
+  document.getElementById('detail-close-bottom')
+    .addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) dialog.close();
+  });
+  dialog.addEventListener('close', () => {
+    currentDetailKey = null;
+    const video = document.querySelector('#detail-media video');
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    }
+  });
+}
+
+async function openDetail({
+  key, filename, size, capturedAt, sourcePath,
+  deletable, onDelete, refine,
+}) {
+  currentDetailKey = key;
+
+  setText('detail-filename', filename);
+  setText('detail-size', formatBytes(size));
+  setText(
+    'detail-captured',
+    capturedAt ? new Date(capturedAt).toLocaleString() : '—',
+  );
+  setText('detail-source', sourcePath ?? '—');
+
+  // Reset the delete button by cloning — the simplest way to drop any
+  // listener bound by a previous openDetail call.
+  const oldBtn = document.getElementById('detail-delete');
+  const deleteBtn = oldBtn.cloneNode(true);
+  oldBtn.parentNode.replaceChild(deleteBtn, oldBtn);
+  deleteBtn.classList.toggle('d-none', !deletable);
+  if (deletable) {
+    deleteBtn.disabled = !isOnline();
+    if (onDelete) {
+      deleteBtn.addEventListener('click', () => onDelete(key, filename));
+    }
+  }
+
+  await renderDetailMedia(key, filename);
+  document.getElementById('detail-dialog').showModal();
+
+  if (refine && isOnline()) {
+    refine(key)
+      .then((updates) => {
+        if (key !== currentDetailKey || !updates) return;
+        if (updates.filename) setText('detail-filename', updates.filename);
+        if (updates.capturedAt) {
+          const d = new Date(updates.capturedAt);
+          if (!Number.isNaN(d.getTime())) {
+            setText('detail-captured', d.toLocaleString());
+          }
+        }
+        if (updates.sourcePath) setText('detail-source', updates.sourcePath);
+        if (typeof updates.size === 'number') {
+          setText('detail-size', formatBytes(updates.size));
+        }
+      })
+      .catch(() => { /* keep what we have */ });
+  }
+}
+
+async function renderDetailMedia(key, filename) {
+  const container = document.getElementById('detail-media');
+  container.replaceChildren();
+  const isVideo = VIDEO_RE.test(filename);
+
+  const client = await ensureBucketClient();
+  if (!isOnline() || !client) {
+    container.appendChild(detailPlaceholder('Offline — connect to load preview'));
+    return;
+  }
+
+  let src;
+  try {
+    src = await client.presignGet(key);
+  } catch {
+    container.appendChild(detailPlaceholder('Could not sign URL'));
+    return;
+  }
+
+  if (isVideo) {
+    const video = document.createElement('video');
+    video.controls = true;
+    video.src = src;
+    video.style.width = '100%';
+    video.style.height = '100%';
+    container.appendChild(video);
+  } else {
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = filename;
+    img.style.objectFit = 'contain';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    container.appendChild(img);
+  }
+}
+
+function detailPlaceholder(text) {
+  const div = document.createElement('div');
+  div.className = 'd-flex align-items-center justify-content-center h-100 fs-5 text-muted';
+  div.textContent = text;
+  return div;
+}
 
 // --- Local tab ---
 
@@ -87,10 +229,14 @@ async function bootstrapLocalTab() {
   const offlinePill = document.getElementById('local-offline-pill');
 
   const controller = createSyncController();
+  // Pre-fetch the bucket client so renderCard can presign thumbs for
+  // already-uploaded items on the very first paint.
+  let client = await ensureBucketClient();
 
   await refreshGrid();
   await wireControls();
   wireConnectivityLocal();
+  wireGridClicks();
   subscribeBroadcast();
 
   async function refreshGrid() {
@@ -99,9 +245,31 @@ async function bootstrapLocalTab() {
       records.push(r);
     });
     records.sort((a, b) => (b.mtime ?? 0) - (a.mtime ?? 0));
-    grid.replaceChildren(...records.map(renderCard));
+    grid.replaceChildren(...records.map((r) => renderCard(r, client)));
     empty.classList.toggle('d-none', records.length > 0);
     updateSummary(records);
+  }
+
+  function wireGridClicks() {
+    grid.addEventListener('click', async (e) => {
+      const col = e.target.closest('.col[data-path]');
+      if (!col) return;
+      const record = await db.get('sync_index', col.dataset.path);
+      // Only uploaded items have a bucket key to preview.
+      if (!record || record.status !== 'uploaded' || !record.hash) return;
+      if (!client) client = await ensureBucketClient();
+      if (!client) return;
+      const filename = record.path.split('/').pop();
+      const key = keyFor(bucketPrefix, record.hash, filename);
+      openDetail({
+        key,
+        filename,
+        size: record.size,
+        capturedAt: record.mtime,
+        sourcePath: record.path,
+        deletable: false,
+      });
+    });
   }
 
   async function wireControls() {
@@ -163,6 +331,9 @@ async function bootstrapLocalTab() {
         applyBadge(msg.path, 'retrying', msg.error);
       } else if (msg.type === 'file-uploaded') {
         applyBadge(msg.path, 'uploaded');
+        // Re-render this card so its thumb switches from the in-flight
+        // placeholder to the bucket-presigned image.
+        refreshCardThumb(msg.path);
       } else if (msg.type === 'file-error') {
         applyBadge(msg.path, 'errored', msg.error);
       } else if (msg.type === 'folder-error') {
@@ -175,10 +346,19 @@ async function bootstrapLocalTab() {
     if (!grid.querySelector(`[data-path="${cssEscape(path)}"]`)) {
       // Create a stub card from minimal info; it'll fill in on the next
       // refreshGrid() (which fires on completion) with the rest.
-      const stub = renderCard({ path, status: 'pending' });
+      const stub = renderCard({ path, status: 'pending' }, client);
       grid.prepend(stub);
       empty.classList.add('d-none');
     }
+  }
+
+  async function refreshCardThumb(path) {
+    const record = await db.get('sync_index', path);
+    if (!record) return;
+    const card = grid.querySelector(`.col[data-path="${cssEscape(path)}"]`);
+    if (!card) return;
+    if (!client) client = await ensureBucketClient();
+    card.replaceWith(renderCard(record, client));
   }
 
   function applyBadge(path, key, errorMsg) {
@@ -197,7 +377,7 @@ async function bootstrapLocalTab() {
   }
 }
 
-function renderCard(record) {
+function renderCard(record, client) {
   const filename = record.path?.split('/').pop() ?? record.path;
   const folder = record.folderLabel ?? '—';
   const date = record.mtime ? new Date(record.mtime).toLocaleDateString() : '—';
@@ -206,49 +386,85 @@ function renderCard(record) {
   const col = document.createElement('div');
   col.className = 'col';
   col.dataset.path = record.path;
+  if (record.status === 'uploaded') col.style.cursor = 'pointer';
 
   const card = document.createElement('div');
   card.className = 'card h-100';
 
+  const thumb = document.createElement('div');
+  thumb.className = 'ratio ratio-1x1 bg-light position-relative';
+  thumb.dataset.role = 'thumb';
+  renderLocalThumb(thumb, record, client);
+  card.appendChild(thumb);
+
   const body = document.createElement('div');
-  body.className = 'card-body p-3';
+  body.className = 'card-body p-2 small';
 
-  const head = document.createElement('div');
-  head.className = 'd-flex justify-content-between align-items-start gap-2';
-
-  const title = document.createElement('h6');
-  title.className = 'card-title mb-1 text-truncate';
-  title.textContent = escapeText(filename);
-  title.title = escapeText(filename);
-
-  const badge = document.createElement('span');
-  badge.className = 'badge';
-  badge.dataset.role = 'status';
-
-  head.appendChild(title);
-  head.appendChild(badge);
-
-  const meta = document.createElement('div');
-  meta.className = 'text-muted small mb-0';
+  const filenameEl = document.createElement('div');
+  filenameEl.className = 'text-truncate fw-medium';
+  filenameEl.textContent = escapeText(filename);
+  filenameEl.title = escapeText(filename);
+  body.appendChild(filenameEl);
 
   const folderEl = document.createElement('div');
-  folderEl.className = 'text-truncate';
+  folderEl.className = 'text-muted text-truncate';
   folderEl.textContent = escapeText(folder);
   folderEl.title = escapeText(folder);
+  body.appendChild(folderEl);
 
   const stats = document.createElement('div');
+  stats.className = 'text-muted';
   stats.textContent = `${date} · ${size}`;
+  body.appendChild(stats);
 
-  meta.appendChild(folderEl);
-  meta.appendChild(stats);
-
-  body.appendChild(head);
-  body.appendChild(meta);
   card.appendChild(body);
   col.appendChild(card);
-
-  setBadge(badge, record.status, record.error);
   return col;
+}
+
+function renderLocalThumb(thumbEl, record, client) {
+  thumbEl.replaceChildren();
+  const filename = record.path?.split('/').pop() ?? record.path ?? '';
+  const isVideo = VIDEO_RE.test(filename);
+
+  if (isVideo) {
+    thumbEl.appendChild(thumbPlaceholder('🎬'));
+  } else if (
+    record.status === 'uploaded' && client && record.hash && bucketPrefix
+  ) {
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.alt = filename;
+    img.style.objectFit = 'cover';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    const key = keyFor(bucketPrefix, record.hash, filename);
+    client.presignGet(key)
+      .then((src) => { img.src = src; })
+      .catch((err) => console.warn('local preview presign failed:', key, err));
+    thumbEl.appendChild(img);
+  } else {
+    thumbEl.appendChild(thumbPlaceholder(statusEmoji(record.status)));
+  }
+
+  const badge = document.createElement('span');
+  badge.className = 'badge position-absolute top-0 end-0 m-1';
+  badge.dataset.role = 'status';
+  setBadge(badge, record.status, record.error);
+  thumbEl.appendChild(badge);
+}
+
+function thumbPlaceholder(emoji) {
+  const div = document.createElement('div');
+  div.className = 'd-flex align-items-center justify-content-center fs-1';
+  div.textContent = emoji;
+  return div;
+}
+
+function statusEmoji(status) {
+  if (status === 'uploaded') return '✅';
+  if (status === 'errored') return '⚠️';
+  return '⏳';
 }
 
 function setBadge(badge, key, errorMsg) {
@@ -283,27 +499,19 @@ async function bootstrapRemoteTab() {
 
   let allRecords = [];
   let rendered = 0;
-  let client = null;
-  let prefix = null;
   let refreshing = false;
+  const headCache = new Map();
+  let client = await ensureBucketClient();
 
   await initialRender();
   setupInfiniteScroll();
   wireConnectivity();
   wireRefresh();
-  wireDetailDialog();
-  await maybeBuildClient();
+  wireGridClicks();
+  refreshBtn.disabled = !client || !isOnline();
   // Auto-reconcile on first open if online + configured.
   if (isOnline() && client) {
     runReconcile();
-  }
-
-  async function maybeBuildClient() {
-    if (!(await hasConfig())) return;
-    const config = await loadConfig();
-    client = createBucketClient(config);
-    prefix = config.prefix;
-    refreshBtn.disabled = !isOnline();
   }
 
   async function initialRender() {
@@ -380,7 +588,7 @@ async function bootstrapRemoteTab() {
   async function runReconcile() {
     if (refreshing) return;
     if (!client) {
-      await maybeBuildClient();
+      client = await ensureBucketClient();
       if (!client) return;
     }
     refreshing = true;
@@ -388,7 +596,7 @@ async function bootstrapRemoteTab() {
     refreshBtn.textContent = 'Refreshing…';
     summary.textContent = 'Refreshing…';
     try {
-      await reconcile(client, prefix, db);
+      await reconcile(client, bucketPrefix, db);
       await initialRender();
       updateSummary('refreshed just now');
     } catch (err) {
@@ -400,139 +608,42 @@ async function bootstrapRemoteTab() {
     }
   }
 
-  // --- Detail view (lives inside bootstrapRemoteTab so it shares
-  //     `client`, `allRecords`, `rendered`, updateEmpty, updateSummary). ---
-
-  let currentDetailKey = null;
-  const headCache = new Map();
-
-  function wireDetailDialog() {
-    // Card click delegation.
+  function wireGridClicks() {
     grid.addEventListener('click', (e) => {
       const col = e.target.closest('.col[data-key]');
       if (!col) return;
-      openDetail(col.dataset.key);
+      const record = allRecords.find((r) => r.key === col.dataset.key);
+      if (!record) return;
+      const filename = record.key.split('/').pop();
+      openDetail({
+        key: record.key,
+        filename,
+        size: record.size,
+        capturedAt: record.lastModified,
+        sourcePath: undefined,
+        deletable: true,
+        onDelete: handleDelete,
+        refine: remoteRefine,
+      });
     });
-
-    const dialog = document.getElementById('detail-dialog');
-    document.getElementById('detail-close').addEventListener('click', () => dialog.close());
-    document.getElementById('detail-close-bottom').addEventListener('click', () => dialog.close());
-    dialog.addEventListener('click', (e) => {
-      if (e.target === dialog) dialog.close();
-    });
-    dialog.addEventListener('close', () => {
-      currentDetailKey = null;
-      // Stop any video playback when the dialog closes.
-      const video = document.querySelector('#detail-media video');
-      if (video) {
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-      }
-    });
-
-    document.getElementById('detail-delete').addEventListener('click', onDelete);
   }
 
-  async function openDetail(key) {
-    const record = allRecords.find((r) => r.key === key);
-    if (!record) return;
-    currentDetailKey = key;
-
-    const filenameFromKey = key.split('/').pop();
-    setText('detail-filename', filenameFromKey);
-    setText('detail-size', formatBytes(record.size));
-    setText(
-      'detail-captured',
-      record.lastModified
-        ? new Date(record.lastModified).toLocaleString()
-        : '—',
-    );
-    setText('detail-source', '—');
-
-    document.getElementById('detail-delete').disabled = !isOnline() || !client;
-
-    await renderDetailMedia(record);
-    document.getElementById('detail-dialog').showModal();
-
-    // Async: HEAD for x-amz-meta-* and refine displayed metadata.
-    if (isOnline() && client) {
-      refineFromHead(key, record).catch(() => { /* keep what we have */ });
-    }
-  }
-
-  async function renderDetailMedia(record) {
-    const container = document.getElementById('detail-media');
-    container.replaceChildren();
-    const filename = record.key.split('/').pop();
-    const isVideo = /\.(mp4|mov|webm|m4v|avi)$/i.test(filename);
-
-    if (!isOnline() || !client) {
-      const div = document.createElement('div');
-      div.className =
-        'd-flex align-items-center justify-content-center h-100 fs-5 text-muted';
-      div.textContent = 'Offline — connect to load preview';
-      container.appendChild(div);
-      return;
-    }
-
-    let src;
-    try {
-      src = await client.presignGet(record.key);
-    } catch {
-      const div = document.createElement('div');
-      div.className =
-        'd-flex align-items-center justify-content-center h-100 fs-5 text-muted';
-      div.textContent = 'Could not sign URL';
-      container.appendChild(div);
-      return;
-    }
-
-    if (isVideo) {
-      const video = document.createElement('video');
-      video.controls = true;
-      video.src = src;
-      video.style.width = '100%';
-      video.style.height = '100%';
-      container.appendChild(video);
-    } else {
-      const img = document.createElement('img');
-      img.src = src;
-      img.alt = filename;
-      img.style.objectFit = 'contain';
-      img.style.width = '100%';
-      img.style.height = '100%';
-      container.appendChild(img);
-    }
-  }
-
-  async function refineFromHead(key, record) {
-    if (key !== currentDetailKey) return;
+  async function remoteRefine(key) {
     let head = headCache.get(key);
     if (!head) {
       head = await client.head(key);
       headCache.set(key, head);
     }
-    if (key !== currentDetailKey) return;
     const meta = head.metadata ?? {};
-    if (meta.filename) setText('detail-filename', meta.filename);
-    if (meta['captured-at']) {
-      const d = new Date(meta['captured-at']);
-      if (!Number.isNaN(d.getTime())) {
-        setText('detail-captured', d.toLocaleString());
-      }
-    }
-    if (meta['source-path']) setText('detail-source', meta['source-path']);
-    // Prefer the HEAD-reported size if it differs (rare).
-    if (typeof head.size === 'number') {
-      setText('detail-size', formatBytes(head.size));
-    }
+    return {
+      filename: meta.filename,
+      capturedAt: meta['captured-at'],
+      sourcePath: meta['source-path'],
+      size: typeof head.size === 'number' ? head.size : undefined,
+    };
   }
 
-  async function onDelete() {
-    const key = currentDetailKey;
-    if (!key) return;
-    const filename = key.split('/').pop();
+  async function handleDelete(key, filename) {
     if (!confirm(`Delete ${filename}? This is permanent.`)) return;
     try {
       await client.delete(key);

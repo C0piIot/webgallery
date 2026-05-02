@@ -59,26 +59,19 @@ Filename stays (Local users pick by name). Folder + date+size match the existing
 
 ### 3. Thumb rendering rules
 
-```js
-function renderLocalThumb(thumbEl, record, client) {
-  const filename = record.path.split('/').pop();
-  const isVideo = /\.(mp4|mov|webm|m4v|avi)$/i.test(filename);
+`renderLocalThumb(thumbEl, record, client)` clears the thumb container, then:
 
-  if (isVideo) return placeholder(thumbEl, '🎬');
-  if (record.status !== 'uploaded' || !client || !record.hash) {
-    return placeholder(thumbEl, statusEmoji(record.status));
-  }
-  const ext = (filename.match(/\.[^.]+$/) ?? [''])[0];
-  const key = `${bucketPrefix}/media/${record.hash}${ext}`;
-  const img = createImg(filename);
-  client.presignGet(key)
-    .then((src) => { img.src = src; })
-    .catch((err) => console.warn('local preview presign failed:', key, err));
-  thumbEl.appendChild(img);
-}
-```
+- Videos → `🎬` placeholder regardless of status (we don't auto-thumbnail in v1).
+- `status === 'uploaded'` + client + hash + bucketPrefix → presigned `<img>`.
+  - Key built via `keyFor(bucketPrefix, record.hash, filename)` (imported from `lib/upload.js` so the thumb path matches the upload path exactly — same `extOf` lowering).
+  - On `presignGet` failure, log via `console.warn` (same convention used on the Remote side).
+- Anything else → status-emoji placeholder.
 
-Status emoji map: pending/hashing/uploading → `⏳`, errored → `⚠️`. Same set the badge already uses; minimal extra logic.
+Then the status badge (`data-role="status"`) is appended absolutely-positioned in the top-right of the thumb so `applyBadge`'s existing selector still finds it.
+
+Status emoji map: pending/hashing/uploading → `⏳`, errored → `⚠️`, uploaded → `✅` (uploaded has its own image case, but the emoji is the fallback when the hash isn't yet known).
+
+**Per-file thumb refresh on `file-uploaded`** (added during implementation): when the worker finishes uploading a single file, `subscribeBroadcast` calls `refreshCardThumb(path)` which re-reads the record from `sync_index` and re-renders the card. This swaps the `⏳` placeholder for a real preview as soon as each file completes, instead of users staring at placeholders until the entire sync run wraps up. Cheap (one IDB read + one DOM replace per finished file).
 
 ### 4. Detail dialog refactor — share between Local and Remote
 
@@ -170,4 +163,4 @@ await page.locator('#detail-close').click();
 
 - **Failed presigns repeated per render**: each `refreshGrid` rebuilds cards and re-presigns. Cheap (string-only signing) but noisy in console if the bucket is offline. Acceptable for v1.
 - **Order of bootstrap**: `ensureBucketClient()` is async; if Local renders before it resolves, thumbs show placeholders briefly until next refresh. Mitigated by awaiting in both bootstraps before first `refreshGrid` call.
-- **First-sync UX**: cards spend their lifetime as `pending → hashing → uploading → uploaded`, only the last state has a thumb. Users see placeholders during the sync. Acceptable; the deferred FSA-blob-URL work is the proper fix.
+- **First-sync UX**: cards spend their lifetime as `pending → hashing → uploading → uploaded`, only the last state has a thumb. The `refreshCardThumb` hook on `file-uploaded` minimizes the wait — each card flips to a real preview the moment its upload completes, instead of waiting for the whole sync run. Pre-upload phases still show placeholders; the deferred FSA-blob-URL work is the proper fix for those.

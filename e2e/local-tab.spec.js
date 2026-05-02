@@ -52,7 +52,26 @@ test('Local tab renders a card per file with the right badges after a sync', asy
     await expect(card.locator('[data-role="status"]')).toContainText(
       /Uploaded/i,
     );
+    // Uploaded card has a thumb container with a presigned <img src>.
+    // We can't render a .txt as an image, but the wiring sets src to a
+    // signed URL — assert the URL shape.
+    const img = card.locator('[data-role="thumb"] img');
+    await expect(img).toHaveAttribute(
+      'src',
+      /X-Amz-Signature=|x-amz-signature=/i,
+    );
   }
+
+  // Click an uploaded card → shared detail dialog opens read-only.
+  await page.locator('#local-grid [data-path="a.txt"]').click();
+  const dialog = page.locator('#detail-dialog');
+  await expect(dialog).toHaveAttribute('open', '');
+  await expect(page.locator('#detail-filename')).toHaveText('a.txt');
+  // Local opens read-only — the delete button must be hidden, not just
+  // disabled.
+  await expect(page.locator('#detail-delete')).toBeHidden();
+  await page.locator('#detail-close').click();
+  await expect(dialog).not.toHaveAttribute('open', '');
 
   // Cleanup: delete uploaded objects.
   for (const u of uploaded) {
