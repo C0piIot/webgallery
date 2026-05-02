@@ -2,7 +2,7 @@
 // Files are real Blobs with a `name` property (matches the entry shape
 // the walker emits).
 
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import { uploadFile, keyFor, contentDispositionFor } from '../../lib/upload.js';
 
 function fakeClient(overrides = {}) {
