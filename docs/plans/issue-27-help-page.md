@@ -7,7 +7,8 @@
 - Four sections: **What this is** / **S3 primer** / **Provider comparison** / **Security model**.
 - Security section spells out the maintainer-trust risk (any future commit by the repo owner runs in users' browsers) and gives three concrete mitigations + a copyable IAM-policy snippet + a copyable CORS snippet.
 - "Help" link added to the navbar on every page (`index.html`, `setup-storage.html`, `setup-folders.html`, and `help.html` itself with `active` aria state).
-- Welcome alert on `setup-storage.html?welcome=1` gets a small "Read the Help page first" link so brand-new users see it before pasting credentials.
+- **Storage page gets a prominent inline link to Help** above the form on every visit (not just the first-time `?welcome=1` state). This is the screen where users are about to paste credentials, so the security/provider context on the Help page should be one click away regardless of how they got here.
+- Welcome alert on `setup-storage.html?welcome=1` adds an inline "Read the Help page first" link too — brand-new users see it before they even start filling fields.
 - Page is precached in `sw.js` so it works offline once visited.
 
 **Out (deferred)**
@@ -65,7 +66,7 @@ H3  Standing recommendations (HTTPS, no bucket reuse, watch billing).
 
 **Modified**
 - `index.html`, `setup-storage.html`, `setup-folders.html` — add a `<li><a href="./help.html">Help</a></li>` to the navbar; the active page sets `aria-current="page"` + `active` class.
-- `setup-storage.html` — welcome alert text adds an inline link to `./help.html`.
+- `setup-storage.html` — adds an always-visible "First time? **Read the Help page**" hint above the form (Bootstrap `.text-muted small` with an inline link), and the welcome alert text gains an inline link too.
 - `sw.js` — add `./help.html` to `SHELL`; bump `VERSION` v24 → v25.
 - `docs/plans/README.md` — index entry for #27.
 
