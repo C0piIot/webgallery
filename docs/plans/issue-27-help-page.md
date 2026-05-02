@@ -6,9 +6,9 @@
 - New static page `help.html` matching the existing page shell (CSP meta, Bootstrap, navbar, register-sw + install glue).
 - Four sections: **What this is** / **S3 primer** / **Provider comparison** / **Security model**.
 - Security section spells out the maintainer-trust risk (any future commit by the repo owner runs in users' browsers) and gives three concrete mitigations + a copyable IAM-policy snippet + a copyable CORS snippet.
-- "Help" link added to the navbar on every page (`index.html`, `setup-storage.html`, `setup-folders.html`, and `help.html` itself with `active` aria state).
-- **Storage page gets a prominent inline link to Help** above the form on every visit (not just the first-time `?welcome=1` state). This is the screen where users are about to paste credentials, so the security/provider context on the Help page should be one click away regardless of how they got here.
-- Welcome alert on `setup-storage.html?welcome=1` adds an inline "Read the Help page first" link too — brand-new users see it before they even start filling fields.
+- **Storage page gets a prominent inline link to Help** above the form on every visit (not just the first-time `?welcome=1` state). This is the screen where users are about to paste credentials, so the security/provider context on the Help page should be one click away.
+- Welcome alert on `setup-storage.html?welcome=1` adds an inline "Read the Help page first" link too — brand-new users see it before they start filling fields.
+- `help.html`'s own navbar mirrors the others (Gallery / Storage / Folders) so users can navigate back. **No Help item in any navbar** — Help is not a frequently-revisited destination; cluttering every page with a link to it is overkill. Storage is the only screen that benefits from a prominent link.
 - Page is precached in `sw.js` so it works offline once visited.
 
 **Out (deferred)**
@@ -65,8 +65,8 @@ H3  Standing recommendations (HTTPS, no bucket reuse, watch billing).
 - `docs/plans/issue-27-help-page.md` (this file).
 
 **Modified**
-- `index.html`, `setup-storage.html`, `setup-folders.html` — add a `<li><a href="./help.html">Help</a></li>` to the navbar; the active page sets `aria-current="page"` + `active` class.
 - `setup-storage.html` — adds an always-visible "First time? **Read the Help page**" hint above the form (Bootstrap `.text-muted small` with an inline link), and the welcome alert text gains an inline link too.
+- `index.html`, `setup-folders.html` — *unchanged*. (No navbar Help link.)
 - `sw.js` — add `./help.html` to `SHELL`; bump `VERSION` v24 → v25.
 - `docs/plans/README.md` — index entry for #27.
 
@@ -78,7 +78,10 @@ The page is static HTML; no extractable logic.
 
 ### E2E — extend `e2e/smoke.spec.js`
 
-Two new tests, mirroring the existing nav-link smoke pattern: assert the Help nav link gets `active` on `/help.html`, and assert it's reachable from each of the other pages (with a seeded config so the index-page redirect doesn't pre-empt that part of the test).
+Two new tests:
+
+- **`/help.html` loads and shows the navbar** (any nav link visible — proves the page shell rendered).
+- **The storage page links to Help**: navigate to `/setup-storage.html`, click the inline "Read the Help page" link, assert the URL ends in `help.html`. Same flow with `?welcome=1` to cover the welcome-alert link.
 
 ## Verification
 
