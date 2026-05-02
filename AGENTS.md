@@ -7,9 +7,19 @@ that.
 
 ## Plans live in `docs/plans/`
 
-Every issue's approved plan ships as `docs/plans/issue-NN-<slug>.md` in
-the same commit that closes the issue. The plan-mode scratch file (under
-`~/.claude/plans/...` for Claude Code) is transient and not committed.
+**Every issue gets a plan, every plan gets saved.** Before touching code
+on an issue, write a plan as `docs/plans/issue-NN-<slug>.md`. Save it
+*before* implementation starts (or as soon as it's approved in the
+conversation) — not retroactively after the work is done. The plan-mode
+scratch file (under `~/.claude/plans/...` for Claude Code) is transient
+and not committed; the markdown copy under `docs/plans/` is the
+canonical record.
+
+If implementation diverges from the plan — scope shrinks, an approach
+changes, a "we'll do X" turns into "we ended up doing Y" — **update the
+plan file in the same commit** so the design log doesn't lie. The plan
+should reflect what actually shipped, not the original guess.
+
 Update [`docs/plans/README.md`](./docs/plans/README.md) — the design-log
 index — whenever a new plan file lands.
 
