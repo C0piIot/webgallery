@@ -44,3 +44,4 @@ the same change that closes the issue.
 | [#31](https://github.com/C0piIot/webgallery/issues/31) | [Delete confirm should show the friendly filename](./issue-31-delete-confirm-filename.md) |
 | [#32](https://github.com/C0piIot/webgallery/issues/32) | [Fix isFsaAvailable ReferenceError on setup-folders](./issue-32-fsa-alias-bug.md) |
 | [#33](https://github.com/C0piIot/webgallery/issues/33) | [Add ESLint to the lint pipeline](./issue-33-eslint.md) |
+| [#34](https://github.com/C0piIot/webgallery/issues/34) | [Convert to SPA so FSA permissions survive navigation](./issue-34-spa.md) |
